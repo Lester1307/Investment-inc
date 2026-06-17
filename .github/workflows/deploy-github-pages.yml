@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # Points artifact directory to the Vite-built website assets
-          path: 'app/src/main/assets/dist'
+          path: 'dist'
 
       - name: Deploy to GitHub Pages
         id: deployment

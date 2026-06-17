@@ -1,66 +1,71 @@
-# Apex Capital 📈
+# Apex Capital: Elite M&A Tycoon 📈
 
-Welcome to **Apex Capital**—the ultimate elite high-finance investment, stocks, and mergers & acquisitions corporate tycoon simulation game built natively for Android phones and tablets! 
-
-Since you are playing on a phone or tablet, we have automated the entire process so you don't need a computer, laptop, or any typing of commands. You and your users can download and install the game with **just a single click**!
+An immersive, high-stakes finance investment, stock trading, and boardroom mergers & acquisitions simulation. Dominate the trade cards, recruit elite cabinet directors, leverage premium workspace leaseholds, and negotiate high-yield corporate takeovers to scale your liquid seed funds into a multi-billion dollar asset empire.
 
 ---
 
-## ⚡ 1-Click Game Download for Phones & Tablets
+## 🏆 Game Premise & Objective
+You step into the polished shoes of the Managing Director of **Apex Capital**, a venture capital fund. Your mission is simple: financial dominance.
 
-To download the latest build instantly onto your Android phone or tablet, simply tap the custom direct button below:
-
-⭐ **[📥 TAP HERE TO DOWNLOAD APEX CAPITAL APK](https://github.com/YOUR_GITHUB_USERNAME/YOUR_NEW_REPO_NAME/releases/download/latest/Apex_Capital.apk)** ⭐
-
-*(Important: Once you sync to your new GitHub repository, make sure to replace `YOUR_GITHUB_USERNAME` and `YOUR_NEW_REPO_NAME` in the link above with your real GitHub details!)*
-
----
-
-## 📲 How to Install the APK on Your Mobile Device
-
-Once you click the link above and download the file, follow these 3 simple steps to start playing:
-
-1. **Tap the Download Notification**: Once download completes, swipe down your status bar and tap **Apex_Capital.apk** to trigger the installer.
-2. **Enable Unknown Sources (If Asked)**: If your browser says installation is blocked, tap **Settings** in the dialog window and toggle on **"Allow from this source"**. Then click back and press **Install**.
-3. **Open & Run**: If Google Play Protect shows a prompt, tap **"Install anyway"** (this is a standard warning for any custom built Android app outside Google Play Store). Tap **Open** and enjoy!
+- **Objective**: Maximize your **Net Worth** by engaging in tactical stock trading, managing corporate overhead, and acquiring cash-yielding corporate subsidiaries.
+- **Starting Choice**: Name your fund director and select your starting level:
+  - **Easier**: Start with $25k in cash plus a pre-acquired **specialty Coffee Franchise** yielding stable, daily incoming dividends.
+  - **Hard**: Start raw with $25k in liquid capital and no assets.
+- **Victory Condition**: Build sufficient liquid capital and corporate leverage to acquire the ultimate defense conglomerate, **Aegis Planetary Defense**, and establish total market supremacy.
 
 ---
 
-## 🚀 How This Automated Installation Works
-We have installed a developer-grade continuous delivery pipeline in your linked repository:
-1. Every time you push a code change from Google AI Studio to your GitHub repository, the systems automatically wake up.
-2. An automated Gradle build compiles the raw Kotlin code into a production-ready mobile `.apk` installer.
-3. The pipeline creates a rolling **"Latest"** launch version release on your GitHub repository, updating the `Apex_Capital.apk` package asset instantly.
-4. Your download button link above will **always automatic-point** to the latest possible version of your game!
+## 🎮 Core Game Systems
 
----
+### 1. Executive Headquarters (HQ)
+The command center of your operations. Monitor the vital signs of your investment fund:
+- **Liquid Capital**: Cash readily available to buy shares, hire directors, upgrade leaseholds, or make boardroom offers.
+- **Net Worth**: Your total assets, calculated as:
+  $$\text{Net Worth} = \text{Liquid Cash} + \text{Stock Portfolio Value} + \text{Subsidiary Appraisals}$$
+- **Capital Flow Statement**: A breakdown of your passive daily profits from subsidiaries, offset by headquarters rent and professional salaries.
 
-## 🎮 Game Features & Controls
-- **Billion-Dollar Portfolio Management**: Handle multi-million dollar liquidity and watch your real-time assets fluctuate based on the daily trades you make.
-- **Dynamic Stocks & Crypto Ticker**: Navigate to the **"FLOOR"** tab to buy and sell premium tech, biotech, energy, and highly volatile meme stocks.
-- **Deep M&A Negotiation Floor**: Acquire complete corporate targets. Pitch strategies, demand board seats, retain CEOs, or offer fund equity to reduce the raw cash needed to seal the deal!
-- **Breakfast Briefings & World Events**: Experience daily briefings on major legal probes, product breakthrough launches, short-squeezes, and market regulations that alter stock values.
-- **Advisory Fee Protections**: If your negotiations break down and a CEO walks out because your numbers didn't set, pay a tactical consulting advisory premium to reset the proposal table and try again!
-- **Edge-to-Edge Tablet UI**: Completely optimized with beautiful Material Design 3 adaptive cards, smooth animations, and generous tap targets for tactile gameplay on tablets.
+### 2. High-Frequency Trade Floor
+Trade simulated stock equities across distinct corporate sectors. Prices jump next-day based on overnight corporate press releases and geopolitical regulations:
+- **Available Securities**:
+  - `AETH` (Aether Cybernetics): Tech sector. High potential computing systems.
+  - `VTX` (Vortex Energy Grid): Energy sector. Steady utility grids.
+  - `NEXB` (Nexus Bio-molecule): Biotech sector. Volatile clinical genetics laboratories.
+  - `SOLR` (Solaris Power Corp): Energy sector. Dynamic panel developers.
+  - `CLON` (Apex CloneLabs): Biotech sector. Molecular tissues under heavy regulation.
+  - `SHLD` (Aegis Planetary Defense): Tech sector. Highly priced aerospace defense contracts.
+  - `MRE` (Mirage Entertainment): Meme sector. Very volatile server networks.
+  - `MEME` (ShibaChain Protocol): Highly speculative, wild cryptocurrency token.
+- **Trading Caps**: Your current Office Tier dictates the maximum capital volume allowed per transaction.
 
----
+### 3. Boardroom M&A (Mergers & Acquisitions)
+Negotiate directly with independent target business founders to buy out their companies. Once acquired, these subsidiaries yield giant daily cash dividends:
+- **Founder Negotiation Moods**: A CEO's trust meter dictates their mood (Reasonable, Greedy, Defensive, or Walked Out). Low trust increases asking prices. If trust falls below 20%, they will **Walk Out** and lock negotiations.
+- **Boardroom Dialogue Strategies**:
+  - **Highlight Venture Synergy**: Drops baseline valuation asking prices and adds +10 trust (Max 3/deal).
+  - **Argue Valuation Audit**: Forces a price reduction of -6% but details aggressive flaws, harming trust by -15 points (Max 3/deal).
+- **Corporate Deal Sweeteners**: Lower asking thresholds permanently by offering strategic concessions inside the contract:
+  - **Board Seat Option**: Lowers purchase threshold by 8%.
+  - **Fund Equity Share**: Lowers purchase threshold by 12%.
+  - **Retain CEO Position**: Lowers purchase threshold by 5%.
+- **Walkout Resolution**: If a CEO walks out, you must pay a legal consulting fee (recalculated by broker perks) to reset negotiations to default terms.
 
-## 🌐 Play on Web (GitHub Pages)
+### 4. Cabinet Staff Recruitment
+Onboard highly specialized corporate director profiles. Each brings a massive passive benefit to your operations:
+- **Aiden Finch (Financial Analyst)**: Previews tomorrow's stock price trend multipliers directly on the trading interface, neutralizing speculation.
+- **Clara Croft (M&A Deal Broker)**: Specialized corporate lawyer. Halves CEO walkout reset fees and drops their baseline buyout threshold by an additional 5%.
+- **Maximilian Drake (PR Director)**: Restores +3 trust to all target CEOs every morning via press alignment.
+- **Elara Sterling (Quant Developer)**: Implements automated algorithmic bots that boost stock sale markup payouts by +4.0%.
+- **Vance Carter (Asset Portfolio Director)**: Seasoned executive who boosts all passive venture cash flow yields across your portfolio by +25%.
 
-You can also play the desktop-and-mobile web version of **Apex Capital** directly from your web browser! Every time you push your code, your website will automatically update.
-
-### 🕹️ Live Web App URL:
-👉 **[https://YOUR_GITHUB_USERNAME.github.io/YOUR_NEW_REPO_NAME/](https://YOUR_GITHUB_USERNAME.github.io/YOUR_NEW_REPO_NAME/)**
-
-*(Be sure to replace `YOUR_GITHUB_USERNAME` and `YOUR_NEW_REPO_NAME` with your actual GitHub username and repository name once pushed!)*
-
-### 🛠️ One-Time Setup on GitHub:
-To make your website live on GitHub Pages, just turn on the official Actions deployment:
-1. Go to your repository page on GitHub (e.g., `Lester1307/Investment-inc`).
-2. Click the **Settings** tab at the top.
-3. On the left-side navigation menu, click **Pages**.
-4. Inside the **Build and deployment** section, look for **Source**.
-5. Switch the dropdown from `"Deploy from a branch"` to **`"GitHub Actions"`**.
-
-That's it! GitHub will now look for the custom `.github/workflows/deploy-github-pages.yml` deployment workflow, compile your web assets, and host your live interactive trading simulation completely free.
-
+### 5. Headquarters Leaseholds
+Lease increasingly prestigious office premises. Higher tiers unlock higher trade caps, command greater professional prestige, and grant a permanent charisma bonus to target CEOs during board negotiations:
+- **Humble Co-working Desk**: Free shared space inside a noisy lounge.
+  - *Cost*: $0 | *Daily Rent*: $0 | *Single Trade Cap*: $25,000 | *CEO Trust Bonus*: +0%
+- **Shared Creative Office**: Glass corner suite.
+  - *Cost*: $12,500 | *Daily Rent*: $45 | *Single Trade Cap*: $150,000 | *CEO Trust Bonus*: +10%
+- **Downtown Commerce Hub**: Elite executive suite with panoramic city views.
+  - *Cost*: $65,000 | *Daily Rent*: $220 | *Single Trade Cap*: $800,000 | *CEO Trust Bonus*: +25%
+- **Apex Penthouse Suite**: Absolute luxury sky-mansion.
+  - *Cost*: $280,000 | *Daily Rent*: $950 | *Single Trade Cap*: $5,000,000 | *CEO Trust Bonus*: +45%
+- **Apex Financial Tower**: Dominate Wall Street. Top skyscraper ownership.
+  - *Cost*: $1,250,000 | *Daily Rent*: $3,800 | *Single Trade Cap*: Unlimited | *CEO Trust Bonus*: +75%
