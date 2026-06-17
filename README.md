@@ -42,3 +42,25 @@ We have installed a developer-grade continuous delivery pipeline in your linked 
 - **Breakfast Briefings & World Events**: Experience daily briefings on major legal probes, product breakthrough launches, short-squeezes, and market regulations that alter stock values.
 - **Advisory Fee Protections**: If your negotiations break down and a CEO walks out because your numbers didn't set, pay a tactical consulting advisory premium to reset the proposal table and try again!
 - **Edge-to-Edge Tablet UI**: Completely optimized with beautiful Material Design 3 adaptive cards, smooth animations, and generous tap targets for tactile gameplay on tablets.
+
+---
+
+## 🌐 Play on Web (GitHub Pages)
+
+You can also play the desktop-and-mobile web version of **Apex Capital** directly from your web browser! Every time you push your code, your website will automatically update.
+
+### 🕹️ Live Web App URL:
+👉 **[https://YOUR_GITHUB_USERNAME.github.io/YOUR_NEW_REPO_NAME/](https://YOUR_GITHUB_USERNAME.github.io/YOUR_NEW_REPO_NAME/)**
+
+*(Be sure to replace `YOUR_GITHUB_USERNAME` and `YOUR_NEW_REPO_NAME` with your actual GitHub username and repository name once pushed!)*
+
+### 🛠️ One-Time Setup on GitHub:
+To make your website live on GitHub Pages, just turn on the official Actions deployment:
+1. Go to your repository page on GitHub (e.g., `Lester1307/Investment-inc`).
+2. Click the **Settings** tab at the top.
+3. On the left-side navigation menu, click **Pages**.
+4. Inside the **Build and deployment** section, look for **Source**.
+5. Switch the dropdown from `"Deploy from a branch"` to **`"GitHub Actions"`**.
+
+That's it! GitHub will now look for the custom `.github/workflows/deploy-github-pages.yml` deployment workflow, compile your web assets, and host your live interactive trading simulation completely free.
+

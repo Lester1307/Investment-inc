@@ -5,19 +5,14 @@ import {
   Handshake, 
   History, 
   Play, 
-  DollarSign, 
   Award, 
-  HelpCircle, 
   Check, 
   X, 
   Sparkles, 
   TrendingDown, 
-  User, 
-  ChevronRight, 
-  AlertCircle, 
-  Plus
+  AlertCircle
 } from "lucide-react";
-import { Stock, MergerTarget, MarketNews, TransactionHistory, GameState, NegotiationMood } from "./types";
+import { Stock, MergerTarget, MarketNews, TransactionHistory, NegotiationMood } from "./types";
 import { initialStocks, initialMergers, newsList } from "./game/GameData";
 
 // Helper function to format millions
@@ -1313,7 +1308,6 @@ export default function App() {
                 
                 {mergers.map(m => {
                   const isSelected = m.id === selectedMergerId;
-                  const adjustedMinVal = getAdjustedMinimumThreshold(m);
                   return (
                     <div 
                       key={m.id}
