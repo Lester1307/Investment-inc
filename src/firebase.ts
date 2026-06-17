@@ -22,9 +22,26 @@ export interface FirebaseConfig {
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
 
-// Try to load initial config from environment variables
+// Try to load initial config from environment variables or hardcoded config
 const getEnvConfig = (): FirebaseConfig | null => {
   try {
+    // HARDCODED CONFIGURATION BLOCK
+    // You can paste your Firebase configurations here directly to keep it hidden from users!
+    // Example:
+    // const hardcodedConfig: FirebaseConfig | null = {
+    //   apiKey: "AIzaSy...",
+    //   authDomain: "project.firebaseapp.com",
+    //   projectId: "project",
+    //   storageBucket: "project.appspot.com",
+    //   messagingSenderId: "12345678",
+    //   appId: "1:1234:web:abcd"
+    // };
+    const hardcodedConfig: any = null; 
+
+    if (hardcodedConfig && hardcodedConfig.apiKey && hardcodedConfig.projectId) {
+      return hardcodedConfig as FirebaseConfig;
+    }
+
     const metaEnv = (import.meta as any).env || {};
     const apiKey = metaEnv.VITE_FIREBASE_API_KEY;
     const projectId = metaEnv.VITE_FIREBASE_PROJECT_ID;
