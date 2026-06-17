@@ -1,0 +1,6 @@
+{
+  "name": "Apex Capital",
+  "description": "An elite investment fund and mergers & acquisitions corporate tycoon simulation game",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
