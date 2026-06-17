@@ -6,7 +6,7 @@ export interface Stock {
   sharesOwned: number;
   avgBuyPrice: number;
   volatility: number; // 0.0 to 1.0
-  sector: string; // "Tech", "Energy", "Biotech", "Meme"
+  sector: string; // "Tech" | "Energy" | "Biotech" | "Meme"
   dailyTrendFactor: number;
 }
 
@@ -19,13 +19,13 @@ export interface MergerTarget {
   ceoName: string;
   ceoAvatar: string; // Emoji
   description: string;
-  baseValuation: number; // In millions
+  baseValuation: number; // In concrete dollars
   minAcceptableThreshold: number; // Hidden minimum
   currentAskingPrice: number; // Current asking price
   trust: number; // 0 to 100
   mood: NegotiationMood;
   synergyText: string;
-  dailyIncome: number; // Passive daily revenue
+  dailyIncome: number; // Passive daily revenue in dollars
   techStockBoost: number; // Multiplier
   dialogueQuote: string;
 
@@ -53,33 +53,29 @@ export interface MarketNews {
 
 export interface TransactionHistory {
   day: number;
-  type: "BUY" | "SELL" | "M&A" | "DIVIDEND";
+  type: "BUY" | "SELL" | "M&A" | "DIVIDEND" | "UPGRADE" | "SALARY" | "RECRUIT";
   subject: string;
   amount: number;
   isPositive: boolean;
 }
 
-export interface GameState {
-  cashMillions: number;
-  day: number;
-  stocks: Stock[];
-  mergers: MergerTarget[];
-  selectedTab: "HQ" | "FLOOR" | "DEALS" | "STATS";
-  activeNews: MarketNews | null;
-  transactions: TransactionHistory[];
+export interface StaffMember {
+  id: string;
+  name: string;
+  avatar: string;
+  role: string;
+  description: string;
+  hiringCost: number;
+  dailySalary: number;
+  benefitText: string;
+}
 
-  // Trading Floor selection
-  selectedStockTicker: string;
-  tradeAmountInput: string;
-
-  // M&A selection
-  selectedMergerId: string;
-  draftOfferMillions: number;
-
-  // Modal display tags
-  morningBriefOpen: boolean;
-  infoMessage: string | null;
-  errorMessage: string | null;
-  successDealClosed: string | null;
-  walkedOutOpen: boolean;
+export interface OfficeTier {
+  id: string;
+  name: string;
+  cost: number;
+  dailyRent: number;
+  maxTradeLimit: number;
+  trustBonus: number;
+  description: string;
 }
