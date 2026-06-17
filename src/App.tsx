@@ -9,18 +9,12 @@ import {
   Briefcase,
   TrendingUp,
   Users,
-  Home,
-  Cloud,
-  Database,
-  Wifi,
-  WifiOff,
-  Server
+  Home
 } from "lucide-react";
 import { Stock, MergerTarget, MarketNews, TransactionHistory, NegotiationMood } from "./types";
 import { initialStocks, initialMergers, initialStaff, officeTiers, newsList } from "./game/GameData";
 import { 
   saveGameToCloud, 
-  loadGameFromCloud, 
   initFirebase, 
   isFirebaseConnected
 } from "./firebase";
@@ -36,7 +30,7 @@ export default function App() {
   const [day, setDay] = useState<number>(1);
   const [stocks, setStocks] = useState<Stock[]>(initialStocks);
   const [mergers, setMergers] = useState<MergerTarget[]>(initialMergers);
-  const [selectedTab, setSelectedTab] = useState<"HQ" | "FLOOR" | "DEALS" | "STAFF" | "OFFICE" | "STATS" | "CLOUD">("HQ");
+  const [selectedTab, setSelectedTab] = useState<"HQ" | "FLOOR" | "DEALS" | "STAFF" | "OFFICE" | "STATS">("HQ");
   const [activeNews, setActiveNews] = useState<MarketNews | null>(newsList[0]);
   const [transactions, setTransactions] = useState<TransactionHistory[]>([
     { day: 1, type: "DIVIDEND", subject: "Initial Fund Injection", amount: 25000, isPositive: true }
@@ -57,11 +51,6 @@ export default function App() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successDealClosed, setSuccessDealClosed] = useState<string | null>(null);
-
-  // Firebase dynamic connection states
-  const [fbApiKey, setFbApiKey] = useState("");
-  const [fbProjId, setFbProjId] = useState("");
-  const [fbAppId, setFbAppId] = useState("");
 
   // Toast notifications State
   interface Toast {
@@ -95,33 +84,18 @@ export default function App() {
     }
   }, [errorMessage]);
 
-  // Attempt to initialize Firebase from env or stored config on mount
+  // Attempt to initialize Firebase silently from stored config or env on mount
   useEffect(() => {
     const configData = localStorage.getItem("apex_firebase_config");
     if (configData) {
       try {
         const parsed = JSON.parse(configData);
         initFirebase(parsed);
-        setFbApiKey(parsed.apiKey || "");
-        setFbProjId(parsed.projectId || "");
-        setFbAppId(parsed.appId || "");
       } catch (e) {
         console.error("Failed to parse stored Firebase config", e);
       }
     } else {
       initFirebase();
-      // Try to read environment credentials if preset to fill input boxes
-      try {
-        const metaEnv = (import.meta as any).env || {};
-        const envApiKey = metaEnv.VITE_FIREBASE_API_KEY;
-        const envProjId = metaEnv.VITE_FIREBASE_PROJECT_ID;
-        const envAppId = metaEnv.VITE_FIREBASE_APP_ID;
-        if (envApiKey && envProjId && envAppId) {
-          setFbApiKey(envApiKey);
-          setFbProjId(envProjId);
-          setFbAppId(envAppId);
-        }
-      } catch (e) {}
     }
   }, []);
 
@@ -1133,8 +1107,7 @@ export default function App() {
             { id: "DEALS", label: "Boardroom M&A", icon: Handshake },
             { id: "STAFF", label: "Executive Staff", icon: Users },
             { id: "OFFICE", label: "Office Tiers", icon: Briefcase },
-            { id: "STATS", label: "Asset logs", icon: History },
-            { id: "CLOUD", label: "Cloud Save & Sync", icon: Server }
+            { id: "STATS", label: "Asset logs", icon: History }
           ].map(tab => {
             const Icon = tab.icon;
             const isSelected = selectedTab === tab.id;
@@ -1808,222 +1781,6 @@ export default function App() {
                 Hard Reset Application
               </button>
             </div>
-          </div>
-        )}
-
-        {/* TAB 7: CLOUD SAVE & SYNC CONTROLLER */}
-        {selectedTab === "CLOUD" && (
-          <div className="space-y-6 animate-toast-in">
-            
-            {/* PERSISTENCE HEADER & STATUS */}
-            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 transition-colors ${
-              isFirebaseConnected() 
-                ? "bg-emerald-950/20 border-emerald-500/30" 
-                : "bg-slate-900 border-slate-850"
-            }`}>
-              <div className="flex items-center space-x-4">
-                <div className={`p-3 rounded-full ${
-                  isFirebaseConnected() ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-400"
-                }`}>
-                  {isFirebaseConnected() ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-white">
-                    Database Connection: {isFirebaseConnected() ? "ONLINE" : "OFFLINE / LOCAL"}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    {isFirebaseConnected() 
-                      ? `Connected to Firestore! Your progress backs up to the cloud key "${userName.toLowerCase()}".` 
-                      : "Operating in client-side fallback mode. Paste your project specifications below to connect your Firebase database."}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2 shrink-0">
-                <span className={`h-2.5 w-2.5 rounded-full inline-block ${
-                  isFirebaseConnected() ? "bg-emerald-400 animate-pulse" : "bg-red-400"
-                }`} />
-                <span className="text-xs font-bold text-slate-300">
-                  {isFirebaseConnected() ? "Cloud Sync Enabled" : "Local Save Only"}
-                </span>
-              </div>
-            </div>
-
-            {/* MANUAL MANIPULATION ACTIONS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* BACKUP COMMAND */}
-              <div className="bg-slate-900 border border-slate-850 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Cloud className="w-4 h-4 text-amber-500" />
-                  <h4 className="font-bold text-sm text-white">Cloud Backup Save</h4>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Uploads your current funds, active portfolio shares, specialist hires, and leasehold milestones to Firestore immediately.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={async () => {
-                      if (!isFirebaseConnected()) {
-                        showToast("Firebase is not connected yet! Paste credentials below first.", "error");
-                        return;
-                      }
-                      showToast("Uploading progress card to Cloud Firestore...", "info");
-                      const ok = await saveGameToCloud(userName, {
-                        userName,
-                        startType,
-                        cash,
-                        day,
-                        stocks,
-                        mergers,
-                        selectedTab,
-                        activeNews,
-                        transactions,
-                        officeId,
-                        hiredStaffIds
-                      });
-                      if (ok) {
-                        showToast("Progress successfully synced to Firestore timeline!", "success");
-                      } else {
-                        showToast("Cloud sync failed. Check database limits or internet.", "error");
-                      }
-                    }}
-                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-xl text-xs transition-colors"
-                  >
-                    Backup Local State to Cloud
-                  </button>
-                </div>
-              </div>
-
-              {/* RESTORE COMMAND */}
-              <div className="bg-slate-900 border border-slate-850 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Database className="w-4 h-4 text-cyan-500" />
-                  <h4 className="font-bold text-sm text-white">Restore Cloud State</h4>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Downloads and restores the game save associated with the name: <span className="text-amber-500 font-bold font-mono">"{userName}"</span>. Overwrites your current timeline.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={async () => {
-                      if (!isFirebaseConnected()) {
-                        showToast("Firebase is not connected yet! Use credentials board below.", "error");
-                        return;
-                      }
-                      showToast(`Querying cloud save for player "${userName}"...`, "info");
-                      const cloudState = await loadGameFromCloud(userName);
-                      if (cloudState) {
-                        setCash(cloudState.cash ?? 25000);
-                        setDay(cloudState.day ?? 1);
-                        setStocks(cloudState.stocks ?? initialStocks);
-                        setMergers(cloudState.mergers ?? initialMergers);
-                        setSelectedTab(cloudState.selectedTab ?? "HQ");
-                        setActiveNews(cloudState.activeNews ?? newsList[0]);
-                        setTransactions(cloudState.transactions ?? []);
-                        setOfficeId(cloudState.officeId ?? "desk");
-                        setHiredStaffIds(cloudState.hiredStaffIds ?? []);
-                        showToast("Cloud backup loaded into memory perfectly!", "success");
-                      } else {
-                        showToast(`No database record was found matching key "${userName}".`, "error");
-                      }
-                    }}
-                    className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold py-3 rounded-xl text-xs transition-colors"
-                  >
-                    Download Sync from Cloud
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
-            {/* CREDENTIALS INPUT BOARD */}
-            <div className="bg-slate-900 border border-slate-850 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center space-x-2">
-                <Server className="w-4 h-4 text-slate-300" />
-                <h4 className="font-bold text-sm text-white">Database Credentials Console</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Connect your custom Firebase project to back up and sync your progress automatically. Paste your credentials below, and your timeline will be synchronized instantly.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Firebase API Key</label>
-                  <input
-                    type="password"
-                    placeholder="AIzaSy..."
-                    value={fbApiKey}
-                    onChange={(e) => setFbApiKey(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-amber-500/50 transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project ID</label>
-                  <input
-                    type="text"
-                    placeholder="apex-capital-123"
-                    value={fbProjId}
-                    onChange={(e) => setFbProjId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-cyan-500/50 transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">App ID</label>
-                  <input
-                    type="text"
-                    placeholder="1:1047:web:abcd"
-                    value={fbAppId}
-                    onChange={(e) => setFbAppId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-cyan-500/50 transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end">
-                <button
-                  onClick={() => {
-                    if (!fbApiKey || !fbProjId || !fbAppId) {
-                      showToast("Please provide all credential fields above.", "error");
-                      return;
-                    }
-                    const config = {
-                      apiKey: fbApiKey.trim(),
-                      projectId: fbProjId.trim(),
-                      appId: fbAppId.trim(),
-                      authDomain: `${fbProjId.trim()}.firebaseapp.com`,
-                      storageBucket: `${fbProjId.trim()}.appspot.com`
-                    };
-                    localStorage.setItem("apex_firebase_config", JSON.stringify(config));
-                    const result = initFirebase(config);
-                    if (result) {
-                      showToast("Firebase live database synced!", "success");
-                      saveGame({
-                        userName,
-                        startType,
-                        cash,
-                        day,
-                        stocks,
-                        mergers,
-                        selectedTab: "CLOUD",
-                        activeNews,
-                        transactions,
-                        officeId,
-                        hiredStaffIds
-                      });
-                    } else {
-                      showToast("Invalid config settings. Please check parameters.", "error");
-                    }
-                  }}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-3 rounded-xl text-xs transition-colors shrink-0"
-                >
-                  Connect Database
-                </button>
-              </div>
-
-            </div>
-
           </div>
         )}
 
