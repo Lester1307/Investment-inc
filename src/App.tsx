@@ -134,16 +134,23 @@ export default function App() {
             loadedMergers = [...loadedMergers, ...extraMergers];
           }
           // Guarantee modern corporate metadata defaults on loaded entities
-          loadedMergers = loadedMergers.map((m: any) => ({
-            ...m,
-            stakeOwned: m.stakeOwned !== undefined ? m.stakeOwned : (m.isCompleted ? 100 : 0),
-            ceoType: m.ceoType ?? "original",
-            staffType: m.staffType ?? "standard",
-            isIPOed: m.isIPOed ?? false,
-            reinvestInvestmentAmount: m.reinvestInvestmentAmount ?? 0,
-            growthRateCompound: m.growthRateCompound ?? 0.04,
-            isOpenToNegotiate: m.isOpenToNegotiate !== undefined ? m.isOpenToNegotiate : firstFiveIds.has(m.id)
-          }));
+          loadedMergers = loadedMergers.map((m: any) => {
+            const initialMatch = initialMergers.find(im => im.id === m.id);
+            const dailyIncome = initialMatch ? initialMatch.dailyIncome : m.dailyIncome;
+            const synergyText = initialMatch ? initialMatch.synergyText : m.synergyText;
+            return {
+              ...m,
+              dailyIncome,
+              synergyText,
+              stakeOwned: m.stakeOwned !== undefined ? m.stakeOwned : (m.isCompleted ? 100 : 0),
+              ceoType: m.ceoType ?? "original",
+              staffType: m.staffType ?? "standard",
+              isIPOed: m.isIPOed ?? false,
+              reinvestInvestmentAmount: m.reinvestInvestmentAmount ?? 0,
+              growthRateCompound: m.growthRateCompound ?? 0.04,
+              isOpenToNegotiate: m.isOpenToNegotiate !== undefined ? m.isOpenToNegotiate : firstFiveIds.has(m.id)
+            };
+          });
           setMergers(loadedMergers);
 
           setSelectedTab(state.selectedTab ?? "HQ");
