@@ -9,7 +9,8 @@ import {
   Briefcase,
   TrendingUp,
   Users,
-  Home
+  Home,
+  Newspaper
 } from "lucide-react";
 import { Stock, MergerTarget, MarketNews, TransactionHistory, NegotiationMood } from "./types";
 import { initialStocks, initialMergers, initialStaff, officeTiers, newsList } from "./game/GameData";
@@ -30,8 +31,10 @@ export default function App() {
   const [day, setDay] = useState<number>(1);
   const [stocks, setStocks] = useState<Stock[]>(initialStocks);
   const [mergers, setMergers] = useState<MergerTarget[]>(initialMergers);
-  const [selectedTab, setSelectedTab] = useState<"HQ" | "FLOOR" | "DEALS" | "STAFF" | "OFFICE" | "STATS">("HQ");
+  const [selectedTab, setSelectedTab] = useState<"HQ" | "FLOOR" | "DEALS" | "STAFF" | "OFFICE" | "STATS" | "NEWS">("HQ");
   const [activeNews, setActiveNews] = useState<MarketNews | null>(newsList[0]);
+  const [newsFeed, setNewsFeed] = useState<MarketNews[]>([newsList[0]]);
+  const [pendingWeeklyDeal, setPendingWeeklyDeal] = useState<MergerTarget | null>(null);
   const [transactions, setTransactions] = useState<TransactionHistory[]>([
     { day: 1, type: "DIVIDEND", subject: "Initial Fund Injection", amount: 25000, isPositive: true }
   ]);
@@ -45,9 +48,10 @@ export default function App() {
   const [tradeAmountInput, setTradeAmountInput] = useState<string>("10");
   const [selectedMergerId, setSelectedMergerId] = useState<string>("cafe");
   const [draftOffer, setDraftOffer] = useState<number>(32000);
+  const [boardroomSubTab, setBoardroomSubTab] = useState<"negotiate" | "subsidiaries">("negotiate");
 
   // Notifications / Modal displays
-  const [morningBriefOpen, setMorningBriefOpen] = useState<boolean>(true);
+  const [morningBriefOpen, setMorningBriefOpen] = useState<boolean>(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successDealClosed, setSuccessDealClosed] = useState<string | null>(null);
@@ -110,10 +114,39 @@ export default function App() {
           setStartType(state.startType);
           setCash(state.cash ?? 25000);
           setDay(state.day ?? 1);
-          setStocks(state.stocks ?? initialStocks);
-          setMergers(state.mergers ?? initialMergers);
+
+          // Safe backfill for stocks
+          let loadedStocks = state.stocks ?? initialStocks;
+          if (loadedStocks.length < 100) {
+            const extraStocks = initialStocks.slice(loadedStocks.length);
+            loadedStocks = [...loadedStocks, ...extraStocks];
+          }
+          setStocks(loadedStocks);
+
+          // Safe backfill for boardroom mergers
+          let loadedMergers = state.mergers ?? initialMergers;
+          const firstFiveIds = new Set(["cafe", "solaris", "biogen", "nova", "shld"]);
+          if (loadedMergers.length < 105) {
+            const existingIds = new Set(loadedMergers.map((m: any) => m.id));
+            const extraMergers = initialMergers.filter(m => !existingIds.has(m.id));
+            loadedMergers = [...loadedMergers, ...extraMergers];
+          }
+          // Guarantee modern corporate metadata defaults on loaded entities
+          loadedMergers = loadedMergers.map((m: any) => ({
+            ...m,
+            stakeOwned: m.stakeOwned !== undefined ? m.stakeOwned : (m.isCompleted ? 100 : 0),
+            ceoType: m.ceoType ?? "original",
+            staffType: m.staffType ?? "standard",
+            isIPOed: m.isIPOed ?? false,
+            reinvestInvestmentAmount: m.reinvestInvestmentAmount ?? 0,
+            growthRateCompound: m.growthRateCompound ?? 0.04,
+            isOpenToNegotiate: m.isOpenToNegotiate !== undefined ? m.isOpenToNegotiate : firstFiveIds.has(m.id)
+          }));
+          setMergers(loadedMergers);
+
           setSelectedTab(state.selectedTab ?? "HQ");
           setActiveNews(state.activeNews ?? newsList[0]);
+          setNewsFeed(state.newsFeed ?? [state.activeNews ?? newsList[0]]);
           setTransactions(state.transactions ?? []);
           setOfficeId(state.officeId ?? "desk");
           setHiredStaffIds(state.hiredStaffIds ?? []);
@@ -186,21 +219,183 @@ export default function App() {
   // Display daily earnings
   const dailyPassiveEarnings = useMemo(() => {
     let sum = 0;
-    sum += mergers.filter(m => m.isCompleted).reduce((prev, curr) => prev + curr.dailyIncome, 0);
+    mergers.filter(m => m.isCompleted).forEach((m, idx) => {
+      let income = m.dailyIncome;
+      
+      // Apply CEO Strategy
+      if (m.ceoType === "risky") {
+        const isLucky = (day + idx) % 2 === 0;
+        income = isLucky ? Math.round(income * 1.9) : Math.round(income * 0.45);
+      } else if (m.ceoType === "synergy") {
+        income = Math.round(income * 1.15);
+      } else if (m.ceoType === "ai") {
+        income = Math.round(income * 1.05);
+      }
+      
+      // Apply Staff Headcount multiplier
+      if (m.staffType === "lean") {
+        income = Math.round(income * 0.8);
+      } else if (m.staffType === "high") {
+        income = Math.round(income * 1.50);
+      }
+      
+      sum += income;
+    });
+
     // Carter boosts passive yields by 25%
     if (hiredStaffIds.includes("carter")) {
       sum = Math.round(sum * 1.25);
     }
     return sum;
-  }, [mergers, startType, hiredStaffIds]);
+  }, [mergers, day, hiredStaffIds]);
 
   const dailyDeductions = useMemo(() => {
     let rent = currentOffice.dailyRent;
     let salaries = initialStaff
       .filter(s => hiredStaffIds.includes(s.id))
       .reduce((sum, curr) => sum + curr.dailySalary, 0);
-    return rent + salaries;
-  }, [officeId, hiredStaffIds, currentOffice]);
+
+    // Extra subsidiary wages for high-performance staffing
+    let subUpkeeps = 0;
+    mergers.filter(m => m.isCompleted).forEach(m => {
+      if (m.staffType === "high") {
+        subUpkeeps += 400;
+      }
+    });
+
+    return rent + salaries + subUpkeeps;
+  }, [officeId, hiredStaffIds, currentOffice, mergers]);
+
+  // 1. UPDATE SUBSIDIARY CEO GOVERNANCE STRATEGY
+  const updateSubsidiaryCEO = (id: string, ceoType: "original" | "risky" | "synergy" | "ai") => {
+    if (ceoType === "ai") {
+      if (cash < 15000) {
+        showToast("Insufficient capital to install AI Operations Agent ($15,000 required).", "error");
+        return;
+      }
+      setCash(prev => prev - 15000);
+      showToast("AI Operations Agent deployed successfully! Passive compounding grew +3%.", "success");
+    } else {
+      showToast(`CEO Governance updated to ${ceoType.toUpperCase()} plan.`, "success");
+    }
+
+    setMergers(prev => prev.map(m => {
+      if (m.id === id) {
+        return { ...m, ceoType };
+      }
+      return m;
+    }));
+  };
+
+  // 2. UPDATE SUBSIDIARY STAFFING MODEL
+  const updateSubsidiaryStaff = (id: string, staffType: "lean" | "standard" | "high") => {
+    setMergers(prev => prev.map(m => {
+      if (m.id === id) {
+        return { ...m, staffType };
+      }
+      return m;
+    }));
+    showToast(`Subsidiary staffing set to ${staffType.toUpperCase()} mode.`, "info");
+  };
+
+  // 3. REINVEST AND EXPAND SUBSIDIARY
+  const reinvestInSubsidiary = (id: string) => {
+    const m = mergers.find(item => item.id === id);
+    if (!m) return;
+    
+    let cost = 10000;
+    if (m.baseValuation < 100000) cost = 5000;
+    else if (m.baseValuation < 500000) cost = 25000;
+    else if (m.baseValuation < 2000000) cost = 100000;
+    else cost = 500000;
+
+    if (cash < cost) {
+      showToast(`Insufficient liquid cash. Required: ${formatCurrency(cost)}`, "error");
+      return;
+    }
+
+    setCash(prev => prev - cost);
+
+    setMergers(prev => prev.map(item => {
+      if (item.id === id) {
+        const yieldBoost = Math.round(item.dailyIncome * 0.20);
+        const valBoost = Math.round(cost * 1.30);
+        return {
+          ...item,
+          dailyIncome: item.dailyIncome + yieldBoost,
+          baseValuation: item.baseValuation + valBoost,
+          currentAskingPrice: item.baseValuation + valBoost
+        };
+      }
+      return item;
+    }));
+
+    showToast(`Reinvestment successful! Income increased by +20% and company valuation expanded.`, "success");
+  };
+
+  // 4. LAUNCH SUBSIDIARY INITIAL PUBLIC OFFERING (IPO)
+  const launchSubsidiaryIPO = (id: string) => {
+    const m = mergers.find(item => item.id === id);
+    if (!m) return;
+
+    if (m.isIPOed) {
+      showToast("Company is already listed on the public exchange.", "error");
+      return;
+    }
+
+    let ticker = "M_" + m.name.split(" ")[0].substring(0, 3).toUpperCase();
+    ticker = ticker.replace(/[^A-Z]/g, "X");
+    while (ticker.length < 3) ticker += "X";
+    if (ticker.length > 5) ticker = ticker.substring(0, 5);
+
+    const instantCash = Math.round(m.baseValuation * 0.30);
+    setCash(prev => prev + instantCash);
+
+    setMergers(prev => prev.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          isIPOed: true,
+          ipoTicker: ticker,
+          stakeOwned: 70
+        };
+      }
+      return item;
+    }));
+
+    const ipoPrice = Math.round((m.baseValuation / 1150) * 10) / 10;
+    const newStock: Stock = {
+      ticker,
+      name: `${m.name} (Acquired)`,
+      currentPrice: ipoPrice,
+      priceHistory: [
+        Math.round(ipoPrice * 0.9 * 10) / 10,
+        Math.round(ipoPrice * 1.05 * 10) / 10,
+        Math.round(ipoPrice * 0.95 * 10) / 10,
+        ipoPrice
+      ],
+      sharesOwned: 0,
+      avgBuyPrice: 0,
+      volatility: m.ceoType === "risky" ? 0.55 : 0.18,
+      sector: m.sector,
+      dailyTrendFactor: 1.0
+    };
+
+    setStocks(prev => [newStock, ...prev]);
+
+    setTransactions(prev => [
+      ...prev,
+      {
+        day,
+        type: "DIVIDEND",
+        subject: `IPO Underwriting: ${m.name} [30% sold]`,
+        amount: instantCash,
+        isPositive: true
+      }
+    ]);
+
+    showToast(`🎉 SEC Approved IPO! Sold 30% equity for ${formatCurrency(instantCash)} cash. Listed as Ticker: ${ticker}`, "success");
+  };
 
   // Toast auto-clear
   useEffect(() => {
@@ -256,21 +451,99 @@ export default function App() {
     });
 
     // PR Director Maximilian Drake restores +3 trust to all target CEOs
-    const updatedMergers = mergers.map(m => {
-      if (!m.isCompleted && !m.isWalkedOut) {
+    let mergersCompounded = 0;
+    const updatedMergers = mergers.map((m) => {
+      let updatedM = { ...m };
+      
+      if (!updatedM.isCompleted && !updatedM.isWalkedOut) {
         const trustGain = hiredStaffIds.includes("drake") ? 3 : 0;
-        const nextTrust = Math.min(100, m.trust + trustGain);
+        const nextTrust = Math.min(100, updatedM.trust + trustGain);
         
         let mood: NegotiationMood = "Reasonable";
         if (nextTrust < 25) mood = "Defensive";
         else if (nextTrust < 45) mood = "Greedy";
         else if (nextTrust < 75) mood = "Reasonable";
         else mood = "Thrilled";
-
-        return { ...m, trust: nextTrust, mood };
+        
+        updatedM.trust = nextTrust;
+        updatedM.mood = mood;
       }
-      return m;
+
+      // Weekly compounding logic (runs at the start of a week, i.e. Day 8, 15, 22...)
+      if (updatedM.isCompleted && nextDayNum % 7 === 1) {
+        let baseRate = updatedM.growthRateCompound ?? 0.04;
+        
+        // CEO strategy influences compounding yields
+        if (updatedM.ceoType === "risky") {
+          baseRate = Math.random() > 0.45 ? baseRate * 2.2 : -0.01;
+        } else if (updatedM.ceoType === "ai") {
+          baseRate += 0.03;
+        }
+
+        const multiplier = 1 + baseRate;
+        updatedM.dailyIncome = Math.round(updatedM.dailyIncome * multiplier);
+        updatedM.baseValuation = Math.round(updatedM.baseValuation * multiplier);
+        updatedM.currentAskingPrice = updatedM.baseValuation;
+        
+        mergersCompounded++;
+      }
+      
+      return updatedM;
     });
+
+    // IPO Public Stock prices react dynamically to company management quality!
+    const finalStocks = updatedStocks.map(stock => {
+      const correspondingMerger = mergers.find(m => m.isCompleted && m.isIPOed && m.ipoTicker === stock.ticker);
+      if (correspondingMerger) {
+        let dailyMovement = 1.0;
+        
+        if (correspondingMerger.staffType === "high") {
+          dailyMovement = 1.012; 
+        } else if (correspondingMerger.staffType === "lean") {
+          dailyMovement = 0.988; 
+        } else {
+          dailyMovement = 1.002; 
+        }
+        
+        let weeklyBoost = 1.0;
+        if (nextDayNum % 7 === 1) {
+          const compRate = correspondingMerger.growthRateCompound ?? 0.04;
+          weeklyBoost = 1.0 + compRate;
+        }
+        
+        let nextPrice = stock.currentPrice * dailyMovement * weeklyBoost;
+        const randSeed = (Math.random() * 1) - 0.5;
+        nextPrice = nextPrice * (1.0 + (randSeed * 0.04));
+        
+        if (nextPrice < 1.0) nextPrice = 1.0;
+        if (nextPrice > 10000.0) nextPrice = 10000.0;
+        
+        const newHistory = [...stock.priceHistory, nextPrice];
+        if (newHistory.length > 8) newHistory.shift();
+        
+        return {
+          ...stock,
+          currentPrice: Math.round(nextPrice * 100) / 100,
+          priceHistory: newHistory
+        };
+      }
+      return stock;
+    });
+
+    // Feed new daily news to Global Newsroom
+    const nextNewsFeed = [todayNews, ...newsFeed];
+    if (nextNewsFeed.length > 50) nextNewsFeed.pop();
+    setNewsFeed(nextNewsFeed);
+
+    // Trigger Weekly Deal Alert popup modal!
+    if (nextDayNum % 7 === 1 && nextDayNum > 1) {
+      const lockedDeals = updatedMergers.filter(m => !m.isOpenToNegotiate && !m.isCompleted && !m.isWalkedOut);
+      if (lockedDeals.length > 0) {
+        const randomDeal = lockedDeals[Math.floor(Math.random() * lockedDeals.length)];
+        setPendingWeeklyDeal(randomDeal);
+        showToast("📢 Multi-Million Dollar Investment Opportunity lands! Check proposal.", "info");
+      }
+    }
 
     // Updated transaction logs
     const nextLogs: TransactionHistory[] = [
@@ -293,11 +566,17 @@ export default function App() {
 
     setCash(nextCash);
     setDay(nextDayNum);
-    setStocks(updatedStocks);
+    setStocks(finalStocks);
     setMergers(updatedMergers);
     setActiveNews(todayNews);
     setTransactions(nextLogs);
-    setMorningBriefOpen(true);
+    setMorningBriefOpen(false); // No daily intrusive popup
+
+    if (mergersCompounded > 0) {
+      showToast(`Compounding update: ${mergersCompounded} subsidiaries compounded weekly returns!`, "success");
+    } else {
+      showToast(`Advanced to Day ${nextDayNum}! Check newsroom for market changes.`, "success");
+    }
 
     // Save game state
     saveGame({
@@ -305,10 +584,11 @@ export default function App() {
       startType,
       cash: nextCash,
       day: nextDayNum,
-      stocks: updatedStocks,
+      stocks: finalStocks,
       mergers: updatedMergers,
       selectedTab,
       activeNews: todayNews,
+      newsFeed: nextNewsFeed,
       transactions: nextLogs,
       officeId,
       hiredStaffIds
@@ -1107,6 +1387,7 @@ export default function App() {
             { id: "DEALS", label: "Boardroom M&A", icon: Handshake },
             { id: "STAFF", label: "Executive Staff", icon: Users },
             { id: "OFFICE", label: "Office Tiers", icon: Briefcase },
+            { id: "NEWS", label: "Global Newsroom", icon: Newspaper },
             { id: "STATS", label: "Asset logs", icon: History }
           ].map(tab => {
             const Icon = tab.icon;
@@ -1429,194 +1710,374 @@ export default function App() {
 
         {/* TAB 3: BOARDROOM CO-ACQUISITION PAGE */}
         {selectedTab === "DEALS" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-6">
             
-            {/* MERGER TARGET SELECTOR */}
-            <div className="bg-slate-900 border border-slate-800/85 rounded-2xl p-4 lg:col-span-1 space-y-2">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest px-2 mb-2">Venture Board Targets</h3>
-              
-              <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-                {mergers.map(m => {
-                  const isSelected = selectedMergerId === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => setSelectedMergerId(m.id)}
-                      className={`w-full p-3 rounded-xl flex items-center justify-between transition-colors border text-left ${
-                        isSelected 
-                          ? "bg-slate-800 border-slate-700" 
-                          : "bg-slate-950/30 border-slate-800/40 hover:bg-slate-800/20"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span className="text-2xl">{m.ceoAvatar}</span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-200">{m.name}</div>
-                          <p className="text-[10px] text-slate-400">{m.sector} • Valuation: {formatCurrency(m.baseValuation)}</p>
-                        </div>
-                      </div>
-                      
-                      {m.isCompleted ? (
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase font-bold font-sans">
-                          Acquired
-                        </span>
-                      ) : m.isWalkedOut ? (
-                        <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full uppercase font-bold font-sans">
-                          Walked Out
-                        </span>
-                      ) : (
-                        <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase font-bold font-sans">
-                          Negotiating
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Dual Sub-Tab Switcher */}
+            <div className="flex bg-slate-950 p-1.5 rounded-2xl max-w-sm border border-slate-800/80">
+              <button
+                onClick={() => setBoardroomSubTab("negotiate")}
+                className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all ${
+                  boardroomSubTab === "negotiate" 
+                    ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/5" 
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                🤝 Boardroom Deals ({mergers.filter(m => m.isOpenToNegotiate && !m.isCompleted).length})
+              </button>
+              <button
+                onClick={() => setBoardroomSubTab("subsidiaries")}
+                className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all ${
+                  boardroomSubTab === "subsidiaries" 
+                    ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/5" 
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                🏢 Subsidiaries ({mergers.filter(m => m.isCompleted).length})
+              </button>
             </div>
 
-            {/* STRATEGIC NEGOTIATION SCREEN PANEL */}
-            <div className="bg-slate-900 border border-slate-800/85 rounded-2xl p-6 lg:col-span-2 space-y-6">
-              
-              {/* TARGET CEO SUMMARY */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div className="flex items-center space-x-3">
-                  <span className="text-4xl">{activeMerger.ceoAvatar}</span>
-                  <div>
-                    <h3 className="text-lg font-extrabold text-white">{activeMerger.name}</h3>
-                    <div className="text-xs text-slate-400">Target CEO: <span className="font-bold text-slate-200">{activeMerger.ceoName}</span> • Mood: <span className="font-bold text-amber-400">{activeMerger.mood}</span></div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-500 font-bold uppercase">Negotiation Trust</div>
-                  <div className="text-xl font-black text-emerald-400">{activeMerger.trust}%</div>
-                </div>
-              </div>
-
-              {/* TARGET COMPANY BIO */}
-              <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800/40">{activeMerger.description}</p>
-
-              {/* CEO QUOTE DIALOGUE */}
-              <div className="relative bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl">
-                <div className="absolute top-2 left-2 text-[10px] text-slate-500 uppercase font-bold">Executive Boardroom Feedback</div>
-                <p className="text-xs italic text-amber-200/90 leading-normal mt-3">
-                  {activeMerger.dialogueQuote}
-                </p>
-              </div>
-
-              {/* WALKED OUT DEBT ADVISORY BANNER */}
-              {activeMerger.isWalkedOut ? (
-                <div className="bg-red-950/30 border border-red-500/20 p-5 rounded-xl text-center space-y-3">
-                  <p className="text-xs text-red-300">
-                    The CEO has walked out of negotiations because of insultingly low financial offers or too many aggressive spreadsheet audits. You must pay legal/advisory break-up penalty to call them back to the table.
-                  </p>
-                  <button
-                    onClick={resetWalkedOutCEO}
-                    className="bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs"
-                  >
-                    PAY ADVISORY RESET FEE: {formatCurrency(hiredStaffIds.includes("croft") ? Math.round(activeMerger.baseValuation * 0.05 * 0.5) : Math.round(activeMerger.baseValuation * 0.05))}
-                  </button>
-                </div>
-              ) : activeMerger.isCompleted ? (
-                <div className="bg-emerald-900/10 border border-emerald-500/20 p-5 rounded-xl text-center">
-                  <span className="text-emerald-400 font-bold text-xs uppercase tracking-wider block mb-1">🎉 Merger Integration Fully Finalized!</span>
-                  <span className="text-slate-400 text-xs">This subsidiary now adds passive cash dividends daily. Check your HQ yields portal.</span>
-                </div>
-              ) : (
-                <>
-                  {/* SWEETENERS BOARD CHAIR TOGGLES */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Strategic Deal Sweeteners (Lowers asking threshold)</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <button
-                        onClick={() => toggleSweetener("termBoardSeat")}
-                        className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
-                          activeMerger.termBoardSeat 
-                            ? "bg-emerald-500/10 border-emerald-500" 
-                            : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
-                        }`}
-                      >
-                        <span className="font-bold text-xs">Board Seat Option</span>
-                        <span className="text-[10px] text-slate-400">Drops Min threshold by 8%</span>
-                      </button>
-
-                      <button
-                        onClick={() => toggleSweetener("termEquityShare")}
-                        className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
-                          activeMerger.termEquityShare 
-                            ? "bg-emerald-500/10 border-emerald-500" 
-                            : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
-                        }`}
-                      >
-                        <span className="font-bold text-xs">Fund Equity Share</span>
-                        <span className="text-[10px] text-slate-400 font-sans">Drops Min threshold by 12%</span>
-                      </button>
-
-                      <button
-                        onClick={() => toggleSweetener("termRetainCEO")}
-                        className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
-                          activeMerger.termRetainCEO 
-                            ? "bg-emerald-500/10 border-emerald-500" 
-                            : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
-                        }`}
-                      >
-                        <span className="font-bold text-xs">Retain CEO Position</span>
-                        <span className="text-[10px] text-slate-400">Drops Min threshold by 5%</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* NEGOTIATION PLAY AUDIT ACTIONS */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      onClick={executeHighlightSynergies}
-                      className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold p-3 rounded-xl text-xs flex flex-col items-center justify-center space-y-1 transition-colors"
-                    >
-                      <span>Highlight Ventures Synergy ({activeMerger.highlightedSynergiesCount}/3)</span>
-                      <span className="text-[9px] text-slate-400 text-center leading-normal">Boosts CEO trust +10 points & cuts pricing</span>
-                    </button>
-
-                    <button
-                      onClick={executeArgueValuation}
-                      className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold p-3 rounded-xl text-xs flex flex-col items-center justify-center space-y-1 transition-colors"
-                    >
-                      <span>Argue Valuation Audit ({activeMerger.arguedValuationCount}/3)</span>
-                      <span className="text-[9px] text-slate-400 text-center leading-normal">Reduces price -6% but harms CEO trust -15 points</span>
-                    </button>
-                  </div>
-
-                  {/* FINAL BUYOUT VALUE PROPOSER */}
-                  <div className="space-y-4 pt-4 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-slate-500">Draft Cash Proposal:</div>
-                      <div className="text-xs text-slate-400">Estimated Target Demands: <span className="font-mono text-amber-500 font-bold">{formatCurrency(activeMerger.currentAskingPrice)}</span></div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <input 
-                        type="number" 
-                        value={draftOffer}
-                        onChange={(e) => setDraftOffer(parseInt(e.target.value) || 0)}
-                        className="bg-slate-950 border border-slate-800 w-full rounded-xl px-4 py-3 text-sm text-center font-mono text-white outline-none focus:border-amber-500"
-                      />
-                      <button
-                        onClick={finalizeVentureAcquisition}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-6 py-3 rounded-xl text-xs shadow transition-all active:scale-98 whitespace-nowrap"
-                      >
-                        SEAL CORPORATE ACQUISITION
-                      </button>
-                    </div>
-
-                    {hiredStaffIds.includes("croft") && (
-                      <div className="bg-emerald-900/10 border border-emerald-500/20 p-2 rounded-xl text-[10px] text-emerald-300 text-center leading-normal">
-                        ℹ️ Clara Croft active: CEO breakup fee penalties cut in half & minimum acceptable demands lowered -5%.
-                      </div>
+            {boardroomSubTab === "negotiate" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* MERGER TARGET SELECTOR */}
+                <div className="bg-slate-900 border border-slate-800/85 rounded-2xl p-4 lg:col-span-1 space-y-2">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest px-2 mb-2">Venture Board Targets</h3>
+                  
+                  <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                    {mergers.filter(m => m.isOpenToNegotiate && !m.isCompleted).length === 0 ? (
+                      <div className="text-center py-12 text-slate-500 text-xs font-medium">No open proposals. Wait for weekly dispatches to land!</div>
+                    ) : (
+                      mergers.filter(m => m.isOpenToNegotiate && !m.isCompleted).map(m => {
+                        const isSelected = selectedMergerId === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => setSelectedMergerId(m.id)}
+                            className={`w-full p-3 rounded-xl flex items-center justify-between transition-colors border text-left ${
+                              isSelected 
+                                ? "bg-slate-800 border-slate-700" 
+                                : "bg-slate-950/30 border-slate-800/40 hover:bg-slate-800/20"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-2xl">{m.ceoAvatar}</span>
+                              <div>
+                                <div className="text-xs font-bold text-slate-200">{m.name}</div>
+                                <p className="text-[10px] text-slate-400">{m.sector} • Valuation: {formatCurrency(m.baseValuation)}</p>
+                              </div>
+                            </div>
+                            
+                            {m.isWalkedOut ? (
+                              <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full uppercase font-bold font-sans">
+                                Walked Out
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase font-bold font-sans">
+                                Pitching
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
                     )}
                   </div>
-                </>
-              )}
+                </div>
 
-            </div>
+                {/* STRATEGIC NEGOTIATION SCREEN PANEL */}
+                <div className="bg-slate-900 border border-slate-800/85 rounded-2xl p-6 lg:col-span-2 space-y-6">
+                  {mergers.filter(m => m.isOpenToNegotiate && !m.isCompleted).length === 0 ? (
+                    <div className="text-center py-24 text-slate-400 text-xs space-y-3">
+                      <span className="text-4xl block">📈</span>
+                      <h4 className="font-bold text-slate-300">All Negotiation Pipelines Integrated</h4>
+                      <p className="max-w-xs mx-auto leading-relaxed text-slate-500">You have successfully bought out or resolved all active venture targets. Wait for multi-million dollar deals on weekly day increments!</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* TARGET CEO SUMMARY */}
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-4xl">{activeMerger.ceoAvatar}</span>
+                          <div>
+                            <h3 className="text-lg font-extrabold text-white">{activeMerger.name}</h3>
+                            <div className="text-xs text-slate-400">Target CEO: <span className="font-bold text-slate-200">{activeMerger.ceoName}</span> • Mood: <span className="font-bold text-amber-400">{activeMerger.mood}</span></div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-500 font-bold uppercase">Negotiation Trust</div>
+                          <div className="text-xl font-black text-emerald-400">{activeMerger.trust}%</div>
+                        </div>
+                      </div>
+
+                      {/* TARGET COMPANY BIO */}
+                      <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800/40">{activeMerger.description}</p>
+
+                      {/* CEO QUOTE DIALOGUE */}
+                      <div className="relative bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl">
+                        <div className="absolute top-2 left-2 text-[10px] text-slate-500 uppercase font-bold">Executive Boardroom Feedback</div>
+                        <p className="text-xs italic text-amber-200/90 leading-normal mt-3">
+                          {activeMerger.dialogueQuote}
+                        </p>
+                      </div>
+
+                      {/* WALKED OUT DEBT ADVISORY BANNER */}
+                      {activeMerger.isWalkedOut ? (
+                        <div className="bg-red-950/30 border border-red-500/20 p-5 rounded-xl text-center space-y-3">
+                          <p className="text-xs text-red-300">
+                            The CEO has walked out of negotiations because of insultingly low financial offers or too many aggressive spreadsheet audits. You must pay legal/advisory break-up penalty to call them back to the table.
+                          </p>
+                          <button
+                            onClick={resetWalkedOutCEO}
+                            className="bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs"
+                          >
+                            PAY ADVISORY RESET FEE: {formatCurrency(hiredStaffIds.includes("croft") ? Math.round(activeMerger.baseValuation * 0.05 * 0.5) : Math.round(activeMerger.baseValuation * 0.05))}
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* SWEETENERS BOARD CHAIR TOGGLES */}
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Strategic Deal Sweeteners (Lowers asking threshold)</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <button
+                                onClick={() => toggleSweetener("termBoardSeat")}
+                                className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
+                                  activeMerger.termBoardSeat 
+                                    ? "bg-emerald-500/10 border-emerald-500" 
+                                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
+                                }`}
+                              >
+                                <span className="font-bold text-xs">Board Seat Option</span>
+                                <span className="text-[10px] text-slate-400">Drops Min threshold by 8%</span>
+                              </button>
+
+                              <button
+                                onClick={() => toggleSweetener("termEquityShare")}
+                                className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
+                                  activeMerger.termEquityShare 
+                                    ? "bg-emerald-500/10 border-emerald-500" 
+                                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
+                                }`}
+                              >
+                                <span className="font-bold text-xs">Fund Equity Share</span>
+                                <span className="text-[10px] text-slate-400 font-sans">Drops Min threshold by 12%</span>
+                              </button>
+
+                              <button
+                                onClick={() => toggleSweetener("termRetainCEO")}
+                                className={`p-3 rounded-xl border text-left flex flex-col justify-between space-y-1 transition-all ${
+                                  activeMerger.termRetainCEO 
+                                    ? "bg-emerald-500/10 border-emerald-500" 
+                                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700"
+                                }`}
+                              >
+                                <span className="font-bold text-xs">Retain CEO Position</span>
+                                <span className="text-[10px] text-slate-400">Drops Min threshold by 5%</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* NEGOTIATION PLAY AUDIT ACTIONS */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <button
+                              onClick={executeHighlightSynergies}
+                              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold p-3 rounded-xl text-xs flex flex-col items-center justify-center space-y-1 transition-colors"
+                            >
+                              <span>Highlight Ventures Synergy ({activeMerger.highlightedSynergiesCount}/3)</span>
+                              <span className="text-[9px] text-slate-400 text-center leading-normal">Boosts CEO trust +10 points & cuts pricing</span>
+                            </button>
+
+                            <button
+                              onClick={executeArgueValuation}
+                              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold p-3 rounded-xl text-xs flex flex-col items-center justify-center space-y-1 transition-colors"
+                            >
+                              <span>Argue Valuation Audit ({activeMerger.arguedValuationCount}/3)</span>
+                              <span className="text-[9px] text-slate-400 text-center leading-normal">Reduces price -6% but harms CEO trust -15 points</span>
+                            </button>
+                          </div>
+
+                          {/* FINAL BUYOUT VALUE PROPOSER */}
+                          <div className="space-y-4 pt-4 border-t border-slate-800">
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-slate-500">Draft Cash Proposal:</div>
+                              <div className="text-xs text-slate-400">Estimated Target Demands: <span className="font-mono text-amber-500 font-bold">{formatCurrency(activeMerger.currentAskingPrice)}</span></div>
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                              <input 
+                                type="number" 
+                                value={draftOffer}
+                                onChange={(e) => setDraftOffer(parseInt(e.target.value) || 0)}
+                                className="bg-slate-950 border border-slate-800 w-full rounded-xl px-4 py-3 text-sm text-center font-mono text-white outline-none focus:border-amber-500"
+                              />
+                              <button
+                                onClick={finalizeVentureAcquisition}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-6 py-3 rounded-xl text-xs shadow transition-all active:scale-98 whitespace-nowrap"
+                              >
+                                SEAL CORPORATE ACQUISITION
+                              </button>
+                            </div>
+
+                            {hiredStaffIds.includes("croft") && (
+                              <div className="bg-emerald-900/10 border border-emerald-500/20 p-2 rounded-xl text-[10px] text-emerald-300 text-center leading-normal">
+                                ℹ️ Clara Croft active: CEO breakup fee penalties cut in half & minimum acceptable demands lowered -5%.
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
+                  <h3 className="text-sm font-black text-amber-500 uppercase tracking-widest mb-1">Acquired Corporate Subsidiaries (Controlling Stakes)</h3>
+                  <p className="text-xs text-slate-400 leading-normal">
+                    You have complete controlling stakes in these entities. Appoint custom operations executives, set corporate staffing tiers, reinvest dynamic expansion capital, or list IPO ticker shares under SEC registration to liquidate equity.
+                  </p>
+                </div>
+
+                {mergers.filter(m => m.isCompleted).length === 0 ? (
+                  <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl p-12 text-center max-w-lg mx-auto">
+                    <span className="text-4xl block mb-3">💼</span>
+                    <h4 className="text-sm font-black text-white">No Subsidiaries Acquired Yet</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Build your pasive portfolio! Pitch, sweeten term sheets, and close deals with target companies in the active Boardroom Negotiations catalog.
+                    </p>
+                    <button 
+                      onClick={() => setBoardroomSubTab("negotiate")}
+                      className="mt-5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl transition-all"
+                    >
+                      Browse Deal proposals
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {mergers.filter(m => m.isCompleted).map((m) => {
+                      let reinvestCost = 10000;
+                      if (m.baseValuation < 100000) reinvestCost = 5000;
+                      else if (m.baseValuation < 500000) reinvestCost = 25000;
+                      else if (m.baseValuation < 2000000) reinvestCost = 100000;
+                      else reinvestCost = 500000;
+
+                      return (
+                        <div key={m.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                          
+                          {/* Banner Head */}
+                          <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                            <div className="flex items-center space-x-3">
+                              <span className="text-3xl">{m.ceoAvatar}</span>
+                              <div>
+                                <h4 className="text-xs font-black text-white font-sans uppercase tracking-tight">{m.name}</h4>
+                                <span className="text-[9px] bg-slate-950 text-slate-400 px-2 py-0.5 mt-0.5 inline-block rounded uppercase font-bold tracking-wide border border-slate-850">
+                                  {m.sector}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] text-slate-500 uppercase font-black">Controls Stake</div>
+                              <div className="text-xs font-black text-amber-500">{m.stakeOwned ?? 100}% Held</div>
+                            </div>
+                          </div>
+
+                          {/* Valuation and income panel */}
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850">
+                              <span className="text-[9px] text-slate-500 block font-bold uppercase">Dynamic Valuation</span>
+                              <span className="text-xs font-mono font-bold text-slate-200 mt-0.5 block">{formatCurrency(m.baseValuation)}</span>
+                            </div>
+                            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850">
+                              <span className="text-[9px] text-slate-500 block font-bold uppercase">Weekly yields dividend</span>
+                              <span className="text-xs font-mono font-bold text-emerald-400 mt-0.5 block">+{formatCurrency(m.dailyIncome * 7)}/wk <span className="text-[10px] text-slate-400font-mono">(+{formatCurrency(m.dailyIncome)}/d)</span></span>
+                            </div>
+                          </div>
+
+                          {/* Appointed CEO dropdown/choices */}
+                          <div className="space-y-1.5 pt-1">
+                            <label className="text-[9px] text-slate-500 uppercase font-black tracking-wider block">Appointed Lead executive strategy Plan</label>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {[
+                                { type: "original" as const, label: "Founder", desc: "Standard 1.0x baseline dividends" },
+                                { type: "risky" as const, label: "Highflyer", desc: "Deterministic daily fluctuations (0.45x - 1.9x yields)" },
+                                { type: "synergy" as const, label: "Synergy", desc: "+15% return yields" },
+                                { type: "ai" as const, label: "AI Agent", desc: "+3% weekly compound returns ($15,000 setup)" }
+                              ].map((item) => (
+                                <button
+                                  key={item.type}
+                                  onClick={() => updateSubsidiaryCEO(m.id, item.type)}
+                                  className={`py-1 px-1 rounded-lg border text-center transition-all flex flex-col justify-center items-center ${
+                                    m.ceoType === item.type 
+                                      ? "bg-amber-500 border-amber-500 text-slate-950 font-black" 
+                                      : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400"
+                                  }`}
+                                  title={item.desc}
+                                >
+                                  <span className="text-[9px] font-black">{item.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Staff Headcount selector */}
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] text-slate-500 uppercase font-black tracking-wider block">Operational Staffing Headcount level</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[
+                                { type: "lean" as const, label: "Outsourced", desc: "No daily upkeep overhead. Output: 80% dividends focus" },
+                                { type: "standard" as const, label: "Standard", desc: "Normal corporate upkeep. Output: 100% stable dividends" },
+                                { type: "high" as const, label: "Elite Core", desc: "+$400/day salary upkeep. Output: 150% maximum returns!" }
+                              ].map((item) => (
+                                <button
+                                  key={item.type}
+                                  onClick={() => updateSubsidiaryStaff(m.id, item.type)}
+                                  className={`py-1 px-1.5 rounded-lg border text-center transition-all flex flex-col justify-center items-center ${
+                                    m.staffType === item.type 
+                                      ? "bg-amber-500 border-amber-500 text-slate-950 font-black" 
+                                      : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400"
+                                  }`}
+                                  title={item.desc}
+                                >
+                                  <span className="text-[9px] font-black">{item.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Subscriptions reinvestment & IPO controls */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-850">
+                            <button
+                              onClick={() => reinvestInSubsidiary(m.id)}
+                              className="bg-slate-800 hover:bg-slate-750 border border-slate-750 p-2.5 rounded-xl flex flex-col items-center justify-center space-y-1 transition-all active:scale-98"
+                            >
+                              <span className="font-extrabold text-[10px] text-amber-400 uppercase">📥 REINVEST YIELD</span>
+                              <span className="text-[8px] text-slate-400 text-center leading-tight">Cost: {formatCurrency(reinvestCost)} • Yields permanente +20%</span>
+                            </button>
+
+                            {!m.isIPOed ? (
+                              <button
+                                onClick={() => launchSubsidiaryIPO(m.id)}
+                                className="bg-emerald-950 border border-emerald-500/40 hover:bg-emerald-900 text-emerald-200 p-2.5 rounded-xl flex flex-col items-center justify-center space-y-1 transition-all active:scale-98"
+                              >
+                                <span className="font-extrabold text-[10px] text-emerald-300 uppercase">📈 UNLEASH PUBLIC IPO</span>
+                                <span className="text-[8px] text-slate-300 text-center leading-tight">Sell 30% for {formatCurrency(Math.round(m.baseValuation * 0.30))}</span>
+                              </button>
+                            ) : (
+                              <div className="bg-slate-950 border border-slate-850 px-2 rounded-xl flex flex-col justify-center items-center text-center">
+                                <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-widest">LISTED TICKER</span>
+                                <span className="text-xs font-mono font-black text-amber-500">{m.ipoTicker}</span>
+                                <span className="text-[8px] text-slate-500 mt-0.5">Control: 70% | Public: 30%</span>
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         )}
@@ -1784,6 +2245,72 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 7: GLOBAL NEWSROOM TAB */}
+        {selectedTab === "NEWS" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-800 pb-5 mb-6">
+                <div>
+                  <h3 className="text-sm font-black text-amber-500 uppercase tracking-widest font-mono">📡 APEX Bloomberg Telegraph</h3>
+                  <p className="text-xs text-slate-400 mt-1">Syndicated market intelligence, corporate listings, & macroeconomic volatility analysis.</p>
+                </div>
+                <div className="mt-3 md:mt-0 flex items-center bg-slate-950 p-2.5 rounded-xl border border-slate-850 text-xs">
+                  <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider mr-2">Market Sentiment:</span>
+                  <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>
+                    ACTIVE TRADING BULL CYCLE
+                  </span>
+                </div>
+              </div>
+
+              {/* LIST OF LOGGED NEWS ITEMS */}
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                {newsFeed.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-xs">No syndicated articles received yet. Advance the business day to receive new stories!</div>
+                ) : (
+                  newsFeed.map((news, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`p-4 rounded-xl border bg-slate-950/30 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300 ${
+                        idx === 0 ? "border-amber-500/40 shadow-lg shadow-amber-500/5 bg-slate-900/60" : "border-slate-800/60"
+                      }`}
+                    >
+                      <div className="space-y-1 bg-transparent">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {idx === 0 && (
+                            <span className="bg-amber-500 text-slate-950 text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded">
+                              LATEST DECREE
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded font-sans ${
+                            news.isPositive ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
+                          }`}>
+                            {news.isPositive ? "▲ POSITIVE IMPACT" : "▼ DEPRECIATE FLUID"}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            AFFECTS CO: <span className="text-slate-300 font-extrabold font-mono">{news.affectedTicker}</span>
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-white mt-1">{news.headline}</h4>
+                        <p className="text-xs text-slate-400 leading-relaxed font-sans mt-0.5">{news.description}</p>
+                      </div>
+
+                      <div className="flex items-center space-x-2 shrink-0 md:text-right">
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850 w-full md:w-auto flex items-center md:flex-col justify-between md:justify-center">
+                          <span className="text-[9px] text-slate-500 uppercase font-black md:mb-1 block">TICKER FLUX</span>
+                          <span className={`font-mono text-xs font-black ${news.isPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                            {news.isPositive ? "+" : ""}{(Math.round((news.priceMultiplier - 1) * 100))}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* FLOATING TOAST NOTIFICATIONS */}
@@ -1868,6 +2395,79 @@ export default function App() {
             >
               Sensational, Open Synergy Portfolio
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: WEEKLY DISPATCH NEW DEAL DISCOVERED POPUP */}
+      {pendingWeeklyDeal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="text-center space-y-1">
+              <span className="text-4xl block mb-2">📬</span>
+              <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase font-black font-sans tracking-widest leading-none">
+                Weekly Board Dispatch
+              </span>
+              <h3 className="text-lg font-black text-white mt-2 font-sans tracking-tight">New Corporate Deal Proposal!</h3>
+              <p className="text-xs text-slate-400 font-sans mt-0.5">A fresh venture has landed on the Board-room desk. Review or archive it.</p>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-850 space-y-3">
+              <div className="flex items-center space-x-3">
+                <span className="text-3xl">{pendingWeeklyDeal.ceoAvatar}</span>
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase">{pendingWeeklyDeal.name}</h4>
+                  <span className="text-[10px] text-slate-500 font-bold font-sans uppercase">{pendingWeeklyDeal.sector} sector</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed italic">"{pendingWeeklyDeal.description}"</p>
+              <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-850 pt-2.5">
+                <div>
+                  <span className="text-[9px] text-slate-500 font-bold block uppercase">Est. Valuation</span>
+                  <span className="font-mono text-slate-200 font-extrabold">{formatCurrency(pendingWeeklyDeal.baseValuation)}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-500 font-bold block uppercase">Initial Demands</span>
+                  <span className="font-mono text-amber-500 font-extrabold">{formatCurrency(pendingWeeklyDeal.currentAskingPrice)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setMergers(prev => prev.map(m => {
+                    if (m.id === pendingWeeklyDeal.id) {
+                      return { ...m, isOpenToNegotiate: true };
+                    }
+                    return m;
+                  }));
+                  setSelectedMergerId(pendingWeeklyDeal.id);
+                  setBoardroomSubTab("negotiate");
+                  setSelectedTab("DEALS");
+                  setPendingWeeklyDeal(null);
+                  showToast(`Opening secure negotiation with ${pendingWeeklyDeal.name}!`, "success");
+                }}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl text-xs shadow transition-all active:scale-98"
+              >
+                🤝 NEGOTIATE NOW
+              </button>
+              <button
+                onClick={() => {
+                  setMergers(prev => prev.map(m => {
+                    if (m.id === pendingWeeklyDeal.id) {
+                      return { ...m, isOpenToNegotiate: true };
+                    }
+                    return m;
+                  }));
+                  setPendingWeeklyDeal(null);
+                  showToast("Proposal archived in the Boardroom Deals roster.", "info");
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 rounded-xl text-xs transition-colors"
+              >
+                📁 MOVE TO DEALS
+              </button>
+            </div>
           </div>
         </div>
       )}

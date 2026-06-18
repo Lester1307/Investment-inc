@@ -41,6 +41,16 @@ export interface MergerTarget {
   // Status flags
   isCompleted: boolean;
   isWalkedOut: boolean;
+
+  // Corporate Control Strategy (for >50% stakes)
+  stakeOwned?: number; // e.g. 100 for full buyout
+  ceoType?: "original" | "risky" | "synergy" | "ai";
+  staffType?: "lean" | "standard" | "high";
+  isIPOed?: boolean;
+  ipoTicker?: string;
+  reinvestInvestmentAmount?: number;
+  growthRateCompound?: number;
+  isOpenToNegotiate?: boolean;
 }
 
 export interface MarketNews {
