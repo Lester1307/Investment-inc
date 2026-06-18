@@ -45,6 +45,29 @@ export default function App() {
   const [lastCashCallDay, setLastCashCallDay] = useState<number>(0);
   const [marketingBlitzCount, setMarketingBlitzCount] = useState<number>(0);
 
+  // IMMERSIVE BOARDROOM STATES
+  const [weeklyMeetingCompletedDay, setWeeklyMeetingCompletedDay] = useState<number>(0);
+  const [boardMeetingOpen, setBoardMeetingOpen] = useState<boolean>(false);
+  const [boardMeetingStage, setBoardMeetingStage] = useState<"brief" | "thesis" | "critique" | "answer" | "vote" | "result">("brief");
+  const [boardMeetingThesis, setBoardMeetingThesis] = useState<string | null>(null);
+  const [boardMeetingDefense, setBoardMeetingDefense] = useState<string | null>(null);
+  const [weeklyReportGrade, setWeeklyReportGrade] = useState<string>("");
+  const [weeklyReportCommentary, setWeeklyReportCommentary] = useState<string[]>([]);
+  const [boardWeeklyVotes, setBoardWeeklyVotes] = useState<{alistair: boolean, vance: boolean, cynthia: boolean}>({alistair: false, vance: false, cynthia: false});
+
+  // Pending action for transaction-level board approval
+  const [pendingBoardAction, setPendingBoardAction] = useState<{
+    type: "BUY_STOCK" | "ACQUIRE_COMPANY";
+    ticker?: string;
+    mergerId?: string;
+    quantity?: number;
+    totalCost: number;
+    title: string;
+  } | null>(null);
+  const [boardTransactionStage, setBoardTransactionStage] = useState<"chat" | "voted">("chat");
+  const [transactionDefenseOption, setTransactionDefenseOption] = useState<string | null>(null);
+  const [transactionVoteResult, setTransactionVoteResult] = useState<{alistair: boolean, vance: boolean, cynthia: boolean}>({alistair: false, vance: false, cynthia: false});
+
   // Sub-UI state
   const [selectedStockTicker, setSelectedStockTicker] = useState<string>("AETH");
   const [tradeAmountInput, setTradeAmountInput] = useState<string>("10");
@@ -161,6 +184,7 @@ export default function App() {
           setHiredStaffIds(state.hiredStaffIds ?? []);
           setLastCashCallDay(state.lastCashCallDay ?? 0);
           setMarketingBlitzCount(state.marketingBlitzCount ?? 0);
+          setWeeklyMeetingCompletedDay(state.weeklyMeetingCompletedDay ?? 0);
           setIsOnboarded(true);
         }
       }
@@ -175,7 +199,8 @@ export default function App() {
       const stateToSave = {
         ...updatedState,
         lastCashCallDay,
-        marketingBlitzCount
+        marketingBlitzCount,
+        weeklyMeetingCompletedDay: updatedState.weeklyMeetingCompletedDay !== undefined ? updatedState.weeklyMeetingCompletedDay : weeklyMeetingCompletedDay
       };
       localStorage.setItem("apex_capital_v2_savegame", JSON.stringify(stateToSave));
       
@@ -595,6 +620,19 @@ export default function App() {
 
   // ADVANCE NEXT DAY CORE ROUTINE
   const advanceDay = () => {
+    // Check if a weekly board meeting is due (Every Day 7, Day 14, Day 21...)
+    if (day % 7 === 0 && weeklyMeetingCompletedDay !== day) {
+      setBoardMeetingOpen(true);
+      setBoardMeetingStage("brief");
+      setBoardMeetingThesis(null);
+      setBoardMeetingDefense(null);
+      setWeeklyReportGrade("");
+      setWeeklyReportCommentary([]);
+      setBoardWeeklyVotes({ alistair: false, vance: false, cynthia: false });
+      showToast("🚨 WEEKLY PRESENTATION DUE! Board meeting must be submitted before Day progression.", "error");
+      return;
+    }
+
     const nextDayNum = day + 1;
     const rent = currentOffice.dailyRent;
     const salaries = initialStaff
@@ -782,6 +820,118 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // ACTUAL TRANSACTION EXECUTION AFTER BOARDROOM LANDSLIDE VOTE PASSES
+  const executeApprovedStockPurchase = (targetTicker: string, quantity: number, totalCost: number) => {
+    const nextCash = cash - totalCost;
+    const nextStocks = stocks.map(s => {
+      if (s.ticker === targetTicker) {
+        const nextVolume = s.sharesOwned + quantity;
+        const nextAvg = ((s.avgBuyPrice * s.sharesOwned) + (s.currentPrice * quantity)) / nextVolume;
+        return {
+          ...s,
+          sharesOwned: nextVolume,
+          avgBuyPrice: Math.round(nextAvg * 100) / 100
+        };
+      }
+      return s;
+    });
+
+    const nextLogs: TransactionHistory[] = [
+      ...transactions,
+      {
+        day,
+        type: "BUY",
+        subject: `Bought ${quantity} shares of ${targetTicker} (Board Approved)`,
+        amount: totalCost,
+        isPositive: false
+      }
+    ];
+
+    setCash(nextCash);
+    setStocks(nextStocks);
+    setTransactions(nextLogs);
+    showToast(`Board Order Signed! Purchased ${quantity} shares of ${targetTicker}.`, "success");
+
+    saveGame({
+      userName,
+      startType,
+      cash: nextCash,
+      day,
+      stocks: nextStocks,
+      mergers,
+      selectedTab,
+      activeNews,
+      transactions: nextLogs,
+      officeId,
+      hiredStaffIds,
+      weeklyMeetingCompletedDay
+    });
+  };
+
+  const executeApprovedAcquisition = (targetMergerId: string, draftAmount: number) => {
+    const targetMerger = mergers.find(m => m.id === targetMergerId);
+    if (!targetMerger) return;
+
+    const nextMergers = mergers.map(m => {
+      if (m.id === targetMergerId) {
+        return {
+          ...m,
+          isCompleted: true,
+          dialogueQuote: `“The wires cleared! We are fully integrated into the Apex Capital family. Passive daily dividends are flowing.”`
+        };
+      }
+      return m;
+    });
+
+    const targetStockBoost = targetMerger.techStockBoost ?? 1.15;
+    const nextStocks = stocks.map(s => {
+      if (s.sector === targetMerger.sector) {
+        const nextPrice = Math.round(s.currentPrice * targetStockBoost * 100) / 100;
+        return {
+          ...s,
+          currentPrice: nextPrice,
+          priceHistory: [...s.priceHistory, nextPrice]
+        };
+      }
+      return s;
+    });
+
+    const nextCash = cash - draftAmount;
+    const nextLogs: TransactionHistory[] = [
+      ...transactions,
+      {
+        day,
+        type: "M&A",
+        subject: `ACQUIRED ${targetMerger.name} (Board Approved)`,
+        amount: draftAmount,
+        isPositive: true
+      }
+    ];
+
+    setCash(nextCash);
+    setMergers(nextMergers);
+    setStocks(nextStocks);
+    setTransactions(nextLogs);
+    setSuccessDealClosed(
+      `CONGRATULATIONS! You successfully navigated and acquired ${targetMerger.name}.\nThis firm now sends ${formatCurrency(targetMerger.dailyIncome)} in clean passive earnings to your account every morning!`
+    );
+
+    saveGame({
+      userName,
+      startType,
+      cash: nextCash,
+      day,
+      stocks: nextStocks,
+      mergers: nextMergers,
+      selectedTab,
+      activeNews,
+      transactions: nextLogs,
+      officeId,
+      hiredStaffIds,
+      weeklyMeetingCompletedDay
+    });
+  };
+
   // BUY STOCKS FUNCTION
   const purchaseStock = (quantity: number) => {
     if (quantity <= 0 || isNaN(quantity)) {
@@ -800,49 +950,17 @@ export default function App() {
       return;
     }
 
-    const nextCash = cash - totalCost;
-    const nextStocks = stocks.map(s => {
-      if (s.ticker === activeStock.ticker) {
-        const nextVolume = s.sharesOwned + quantity;
-        const nextAvg = ((s.avgBuyPrice * s.sharesOwned) + (activeStock.currentPrice * quantity)) / nextVolume;
-        return {
-          ...s,
-          sharesOwned: nextVolume,
-          avgBuyPrice: Math.round(nextAvg * 100) / 100
-        };
-      }
-      return s;
+    // Intercept to trigger dynamic interactive board approval modal
+    setPendingBoardAction({
+      type: "BUY_STOCK",
+      ticker: activeStock.ticker,
+      quantity,
+      totalCost,
+      title: `Authorized stock buy: ${quantity} shares of ${activeStock.ticker} for ${formatCurrency(totalCost)}`
     });
-
-    const nextLogs: TransactionHistory[] = [
-      ...transactions,
-      {
-        day,
-        type: "BUY",
-        subject: `Bought ${quantity} shares of ${activeStock.ticker}`,
-        amount: totalCost,
-        isPositive: false
-      }
-    ];
-
-    setCash(nextCash);
-    setStocks(nextStocks);
-    setTransactions(nextLogs);
-    setInfoMessage(`Purchased ${quantity} shares of ${activeStock.ticker}!`);
-
-    saveGame({
-      userName,
-      startType,
-      cash: nextCash,
-      day,
-      stocks: nextStocks,
-      mergers,
-      selectedTab,
-      activeNews,
-      transactions: nextLogs,
-      officeId,
-      hiredStaffIds
-    });
+    setBoardTransactionStage("chat");
+    setTransactionDefenseOption(null);
+    setTransactionVoteResult({ alistair: false, vance: false, cynthia: false });
   };
 
   // SELL STOCKS FUNCTION
@@ -1110,64 +1228,16 @@ export default function App() {
 
     const minAccept = getAdjustedMinimumThreshold(activeMerger);
     if (draftOffer >= minAccept) {
-      // SUCCESS!
-      const nextMergers = mergers.map(m => {
-        if (m.id === selectedMergerId) {
-          return {
-            ...m,
-            isCompleted: true,
-            dialogueQuote: `“The wires cleared! We are fully integrated into the Apex Capital family. Passive daily dividends are flowing.”`
-          };
-        }
-        return m;
+      // SUCCESSFUL PITCH - ROUTE TO BOARD FOR APPROVAL BEFORE SEALING!
+      setPendingBoardAction({
+        type: "ACQUIRE_COMPANY",
+        mergerId: activeMerger.id,
+        totalCost: draftOffer,
+        title: `Venture Acquisition: Buyout & Takeover of ${activeMerger.name} for ${formatCurrency(draftOffer)}`
       });
-
-      // Boost Sector stock prices
-      const nextStocks = stocks.map(s => {
-        if (s.sector === activeMerger.sector) {
-          const nextPrice = Math.round(s.currentPrice * activeMerger.techStockBoost * 100) / 100;
-          return {
-            ...s,
-            currentPrice: nextPrice,
-            priceHistory: [...s.priceHistory, nextPrice]
-          };
-        }
-        return s;
-      });
-
-      const nextCash = cash - draftOffer;
-      const nextLogs: TransactionHistory[] = [
-        ...transactions,
-        {
-          day,
-          type: "M&A",
-          subject: `ACQUIRED ${activeMerger.name}`,
-          amount: draftOffer,
-          isPositive: true
-        }
-      ];
-
-      setCash(nextCash);
-      setMergers(nextMergers);
-      setStocks(nextStocks);
-      setTransactions(nextLogs);
-      setSuccessDealClosed(
-        `CONGRATULATIONS! You successfully negotiated and acquired ${activeMerger.name}.\nThis firm now sends ${formatCurrency(activeMerger.dailyIncome)} in clean passive earnings to your account every morning!`
-      );
-
-      saveGame({
-        userName,
-        startType,
-        cash: nextCash,
-        day,
-        stocks: nextStocks,
-        mergers: nextMergers,
-        selectedTab,
-        activeNews,
-        transactions: nextLogs,
-        officeId,
-        hiredStaffIds
-      });
+      setBoardTransactionStage("chat");
+      setTransactionDefenseOption(null);
+      setTransactionVoteResult({ alistair: false, vance: false, cynthia: false });
     } else {
       // REJECTED Offer
       const nextMergers = mergers.map(m => {
@@ -1906,6 +1976,89 @@ export default function App() {
                 </div>
               </div>
 
+            </div>
+
+            {/* PORTFOLIO ACCORDION MODULE */}
+            <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-6 mt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">💼</span>
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Asset Holdings</h4>
+                    <h3 className="text-sm font-extrabold text-white">Board-Audited Liquid Stocks Portfolio</h3>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  <div className="text-[10px] text-slate-500 uppercase font-black tracking-wider">Total Stock Equity Value</div>
+                  <div className="text-lg font-extrabold text-emerald-400">
+                    {formatCurrency(stocks.reduce((acc, s) => acc + (s.sharesOwned * s.currentPrice), 0))}
+                  </div>
+                </div>
+              </div>
+
+              {stocks.filter(s => s.sharesOwned > 0).length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-xs leading-relaxed bg-slate-950/20 rounded-xl border border-dashed border-slate-800/60 p-4">
+                  ⚠️ No active stock positions currently held in your Corporate Treasury.<br />
+                  Select a ticker from the ledger on the left and acquire shares to begin your portfolio.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[650px]">
+                    <thead>
+                      <tr className="text-slate-500 border-b border-slate-800/60 pb-2">
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px]">Security Ticker</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px]">Sector</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px]">Shares</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px] text-right font-mono">Buy Price</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px] text-right font-mono">Market Price</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px] text-right font-mono">Total Value</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px] text-right font-mono">ROI / Gain</th>
+                        <th className="py-2.5 font-bold uppercase tracking-wider text-[10px] text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {stocks.filter(s => s.sharesOwned > 0).map(stock => {
+                        const totalCost = stock.sharesOwned * stock.avgBuyPrice;
+                        const totalValue = stock.sharesOwned * stock.currentPrice;
+                        const absoluteGain = totalValue - totalCost;
+                        const percentGain = totalCost > 0 ? (absoluteGain / totalCost) * 100 : 0;
+                        const isGainPositive = absoluteGain >= 0;
+
+                        return (
+                          <tr key={stock.ticker} className="hover:bg-slate-800/10 transition-colors">
+                            <td className="py-3.5 pr-2">
+                              <span className="font-mono font-black text-amber-500 bg-slate-950 px-1.5 py-0.5 rounded mr-1.5">
+                                {stock.ticker}
+                              </span>
+                              <span className="font-bold text-slate-200">{stock.name}</span>
+                            </td>
+                            <td className="py-3.5 text-slate-400 text-[11px]">{stock.sector}</td>
+                            <td className="py-3.5 text-slate-300 font-bold">{stock.sharesOwned}</td>
+                            <td className="py-3.5 text-right font-mono text-slate-400">{formatCurrency(stock.avgBuyPrice)}</td>
+                            <td className="py-3.5 text-right font-mono text-amber-500 font-bold">{formatCurrency(stock.currentPrice)}</td>
+                            <td className="py-3.5 text-right font-mono text-white font-extrabold">{formatCurrency(totalValue)}</td>
+                            <td className={`py-3.5 text-right font-mono font-bold ${isGainPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                              <div>{isGainPositive ? "+" : ""}{formatCurrency(absoluteGain)}</div>
+                              <div className="text-[10px] opacity-80">{isGainPositive ? "▲" : "▼"}{percentGain.toFixed(2)}%</div>
+                            </td>
+                            <td className="py-3.5 text-center">
+                              <button
+                                onClick={() => {
+                                  setSelectedStockTicker(stock.ticker);
+                                  window.scrollTo({ top: 300, behavior: "smooth" });
+                                }}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-700/50"
+                              >
+                                Select Trade
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
           </div>
@@ -2747,6 +2900,644 @@ export default function App() {
                 📁 MOVE TO DEALS
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: TRANSACTION-LEVEL BOARDROOM APPROVAL AUDIT */}
+      {pendingBoardAction && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-2xl">🏛️</span>
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Security Boardroom Shield</h4>
+                  <h3 className="text-sm font-black text-white mt-1">Transaction-Level Board Auditing Required</h3>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-amber-500 bg-slate-950 px-2.5 py-1 rounded-xl">
+                Voting Required
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase font-black">Proposed Capital Commitment</span>
+              <div className="text-xs font-extrabold text-white leading-normal">
+                {pendingBoardAction.title}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-2 flex justify-between items-center bg-slate-950/80 py-1.5 px-3 rounded-xl border border-slate-850">
+                <span>Immediate Capital Drawout:</span>
+                <span className="font-mono text-rose-400 font-extrabold">-{formatCurrency(pendingBoardAction.totalCost)}</span>
+              </div>
+            </div>
+
+            {/* Boardroom Chat Log Area */}
+            <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-850 max-h-[250px] overflow-y-auto">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-extrabold">Board Members Debate Feed</div>
+              
+              {/* Sir Alistair Sterling */}
+              <div className="flex items-start space-x-2.5 text-xs">
+                <span className="text-lg bg-emerald-500/10 p-1.5 rounded-full border border-emerald-500/20">👴</span>
+                <div className="flex-1">
+                  <div className="font-extrabold text-emerald-400 text-[10px]">Sir Alistair Sterling <span className="font-medium text-slate-500">• Elder Conservator</span></div>
+                  <p className="text-slate-300 leading-normal mt-0.5 italic">
+                    {transactionDefenseOption === null 
+                      ? "“An asset allocation of this scale restricts our treasury liquidity. Managing Director, what is your primary defensive safety thesis?”"
+                      : transactionDefenseOption === "conservative"
+                      ? "“Excellent depth. Capital preservation and low-beta backing perfectly shield our operations. I issue my full authorization. YES.”"
+                      : transactionDefenseOption === "growth"
+                      ? "“Extremely speculative. Committing valuable stable cash to high-beta runs violates our baseline security indexes. NO.”"
+                      : "“A strict liquidity floor and secure cash offsets fulfill our structural requirements. Prudent. YES.”"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Vance "Vulture" Gekko */}
+              <div className="flex items-start space-x-2.5 text-xs border-t border-slate-900 pt-2.5">
+                <span className="text-lg bg-amber-500/10 p-1.5 rounded-full border border-amber-500/20">🦅</span>
+                <div className="flex-1">
+                  <div className="font-extrabold text-amber-400 text-[10px]">Vance "Vulture" Gekko <span className="font-medium text-slate-500">• Expansion Shark</span></div>
+                  <p className="text-slate-300 leading-normal mt-0.5 italic">
+                    {transactionDefenseOption === null 
+                      ? "“I don't care about downside protection; I care about explosive growth speed. Will this transaction multiply daily dividend outputs?”"
+                      : transactionDefenseOption === "conservative"
+                      ? "“A bit static and slow, but robust balance sheet shields prevent default. I'll pass it to keep the ball rolling. YES.”"
+                      : transactionDefenseOption === "growth"
+                      ? "“Sensational velocity! This leverages active sector momentum and multiplies asset yield compounding. Full force approval. YES.”"
+                      : "“Unsolicited overhead. But passed dividend structures are passed dividends. YES.”"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Cynthia "Heavy-Hand" Vance */}
+              <div className="flex items-start space-x-2.5 text-xs border-t border-slate-900 pt-2.5">
+                <span className="text-lg bg-red-400/10 p-1.5 rounded-full border border-red-500/20">👩‍💼</span>
+                <div className="flex-1">
+                  <div className="font-extrabold text-red-400 text-[10px]">Cynthia "Heavy-Hand" Vance <span className="font-medium text-red-500/80">• Sovereign Auditor (THE HARD VOTE)</span></div>
+                  <p className="text-slate-300 leading-normal mt-0.5 italic text-slate-100">
+                    {transactionDefenseOption === null 
+                      ? "“I see absolutely zero operational synergy in this draw. I am highly inclined to block this transaction right now unless you pledge concrete boardroom override dividends.”"
+                      : transactionDefenseOption === "conservative"
+                      ? "“A basic defense. However, we are sacrificing growth momentum for safety. I remain highly skeptical. NO.”"
+                      : transactionDefenseOption === "growth"
+                      ? "“Complete administrative recklessness. Speculative risk ratios are a fast path to liquidation! Absolutely NO!”"
+                      : "“Prudent gesture. Allocating priority dividends directly to our executive ledger and committing to strict cash caps is a pristine concession. YES.”"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage 1: Choose Defense Strategy */}
+            {boardTransactionStage === "chat" && (
+              <div className="space-y-2.5">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold px-1">Choose Strategic Defense Argument:</div>
+                
+                <button
+                  onClick={() => {
+                    setTransactionDefenseOption("conservative");
+                    setBoardTransactionStage("voted");
+                    setTransactionVoteResult({ alistair: true, vance: true, cynthia: false });
+                  }}
+                  className="w-full p-3 bg-slate-950/30 hover:bg-slate-800/40 border border-slate-800 hover:border-emerald-500/30 text-left rounded-xl transition-all block text-xs"
+                >
+                  <div className="font-black text-emerald-400">🛡️ Defensive Asset-Backed Hedge (Target: Sir Alistair)</div>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-1">
+                    Argue that this provides asset-backed stability, low-beta preservation, and critical defensive counterweight for treasury balances. Satisfies Sir Alistair.
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTransactionDefenseOption("growth");
+                    setBoardTransactionStage("voted");
+                    setTransactionVoteResult({ alistair: false, vance: true, cynthia: false });
+                  }}
+                  className="w-full p-3 bg-slate-950/30 hover:bg-slate-800/40 border border-slate-800 hover:border-amber-500/30 text-left rounded-xl transition-all block text-xs"
+                >
+                  <div className="font-black text-amber-500">🚀 Exponential Growth Velocity (Target: Vance Gekko)</div>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-1">
+                    Deliver a high-impact thesis outlining rapid expansion, capturing active sector momentum, and compounding passive yield margins. Satisfies Vance Gekko.
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTransactionDefenseOption("compliance");
+                    setBoardTransactionStage("voted");
+                    setTransactionVoteResult({ alistair: true, vance: true, cynthia: true });
+                  }}
+                  className="w-full p-3 bg-slate-950/30 hover:bg-slate-800/40 border border-slate-800 hover:border-rose-400/30 text-left rounded-xl transition-all block text-xs border-dashed animate-pulse"
+                >
+                  <div className="font-black text-rose-400">💎 Board Priority Dividends & Safety Floors (Target: Cynthia Vance)</div>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-1">
+                    Pledge a 12% priority dividend override direct to board accounts and enforce a strict $15,000 cash floor on all operations. Satisfies the hardest director Cynthia!
+                  </p>
+                </button>
+              </div>
+            )}
+
+            {/* Stage 2: Voting results & Action Execution */}
+            {boardTransactionStage === "voted" && transactionVoteResult && (
+              <div className="space-y-4">
+                <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-850 space-y-3">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold text-center tracking-wider mb-1">
+                    Boardmembers Tabulated Votes
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5 text-center">
+                    <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                      <div className="text-[10px] text-slate-400 font-bold">Sir Alistair</div>
+                      <div className={`text-xs font-black mt-1 ${transactionVoteResult.alistair ? "text-emerald-400" : "text-rose-400"}`}>
+                        {transactionVoteResult.alistair ? "✅ YES" : "❌ NO"}
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                      <div className="text-[10px] text-slate-400 font-bold">Vance Gekko</div>
+                      <div className={`text-xs font-black mt-1 ${transactionVoteResult.vance ? "text-emerald-400" : "text-rose-400"}`}>
+                        {transactionVoteResult.vance ? "✅ YES" : "❌ NO"}
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                      <div className="text-[10px] text-red-400 font-extrabold">Cynthia Vance</div>
+                      <div className={`text-xs font-black mt-1 ${transactionVoteResult.cynthia ? "text-emerald-400" : "text-rose-400"}`}>
+                        {transactionVoteResult.cynthia ? "✅ YES" : "❌ NO"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const yesCount = [transactionVoteResult.alistair, transactionVoteResult.vance, transactionVoteResult.cynthia].filter(v => v).length;
+                  const isPassed = yesCount >= 2;
+
+                  return (
+                    <div className="space-y-3">
+                      {isPassed ? (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-center">
+                          <span className="text-emerald-400 font-bold text-xs uppercase text-slate-200 font-sans">🎉 BOARD APPROVAL PASS ({yesCount}/3 votes)</span>
+                        </div>
+                      ) : (
+                        <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl text-center">
+                          <span className="text-rose-400 font-bold text-xs uppercase text-slate-200 font-sans">❌ TRANSACTION REJECTED ({yesCount}/3 votes)</span>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        {isPassed ? (
+                          <button
+                            onClick={() => {
+                              if (pendingBoardAction.type === "BUY_STOCK" && pendingBoardAction.ticker && pendingBoardAction.quantity) {
+                                executeApprovedStockPurchase(pendingBoardAction.ticker, pendingBoardAction.quantity, pendingBoardAction.totalCost);
+                              } else if (pendingBoardAction.type === "ACQUIRE_COMPANY" && pendingBoardAction.mergerId) {
+                                executeApprovedAcquisition(pendingBoardAction.mergerId, pendingBoardAction.totalCost);
+                              }
+                              setPendingBoardAction(null);
+                            }}
+                            className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3.5 rounded-xl text-xs font-sans font-bold"
+                          >
+                            SIGN TRANSACTION ORDER & WIRE FUNDS
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setBoardTransactionStage("chat");
+                              setTransactionDefenseOption(null);
+                            }}
+                            className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3.5 rounded-xl text-xs font-sans font-bold"
+                          >
+                            🔄 ADJUST DEFENSIVE ARGUMENT
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setPendingBoardAction(null)}
+                          className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs font-sans font-bold"
+                        >
+                          ABORT TRANSACTION
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: WEEKLY WORK BOARDROOM PRESENTATION DECK */}
+      {boardMeetingOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-2xl">🏛️</span>
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Governing Board of Directors</h4>
+                  <h3 className="text-sm font-black text-white mt-1">Weekly Work Presentation & Performance Audit</h3>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-amber-500 bg-slate-950 px-2.5 py-1 rounded-xl">
+                HQ Session Due
+              </span>
+            </div>
+
+            {/* STAGE 1: THE PERFORMANCE DECK BRIEFING SLIDE */}
+            {boardMeetingStage === "brief" && (
+              <div className="space-y-4">
+                <div className="bg-slate-950/45 border border-slate-800 p-4 rounded-2xl space-y-3">
+                  <div className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-b border-slate-800/60 pb-2">
+                    📊 Managing Director Performance Slide
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs leading-normal font-sans">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold text-slate-400">Liquid Treasury</span>
+                      <span className="font-mono text-white font-black">{formatCurrency(cash)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold text-slate-400">Net Worth Index</span>
+                      <span className="font-mono text-amber-500 font-extrabold">{formatCurrency(netWorth)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold text-slate-400">Subsidiaries Controlled</span>
+                      <span className="font-sans text-slate-200 font-black">{mergers.filter(m => m.isCompleted).length} companies</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold text-slate-400">Weekly HQ Deductions</span>
+                      <span className="font-mono text-rose-400 font-bold">-{formatCurrency(dailyDeductions * 7)}/week</span>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850 text-[11px] leading-relaxed text-slate-400 text-center text-slate-300">
+                    💡 <span className="font-bold text-slate-300">Auditor Insight:</span> Cynthia Vance has noted that headquarters and executive overhead costs sit at <span className="font-semibold text-rose-400">{formatCurrency(dailyDeductions)}/day</span>. She will demand a cost-reduction commitment.
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold px-1 font-sans font-bold">Select Corporate Thesis for Presentation:</div>
+                  
+                  <button
+                    onClick={() => {
+                      setBoardMeetingThesis("Consolidated Defense");
+                      setBoardMeetingStage("critique");
+                      setBoardWeeklyVotes({ alistair: true, vance: false, cynthia: false });
+                    }}
+                    className="w-full p-3.5 bg-slate-950/30 hover:bg-slate-850/40 border border-slate-800 hover:border-emerald-500/30 text-left rounded-xl transition-all block text-xs"
+                  >
+                    <div className="font-black text-emerald-400">🛡️ Pitch Consolidated Treasury Defense</div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-normal">
+                      Emphasize liquid war chest preservation, steady low-beta assets, and absolute avoidance of aggressive bubble speculations. Sir Alistair will love this logic.
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setBoardMeetingThesis("Aggressive Expansion");
+                      setBoardMeetingStage("critique");
+                      setBoardWeeklyVotes({ alistair: false, vance: true, cynthia: false });
+                    }}
+                    className="w-full p-3.5 bg-slate-950/30 hover:bg-slate-850/40 border border-slate-800 hover:border-amber-500/30 text-left rounded-xl transition-all block text-xs"
+                  >
+                    <div className="font-black text-amber-500">🚀 Pitch Aggressive Beta Expansion</div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-normal">
+                      Showcase transaction volumes, immediate turnaround margins, and deployment speed. Argue that idle cash is a decaying resource. Vance Gekko will support this.
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setBoardMeetingThesis("Administrative Synergy");
+                      setBoardMeetingStage("critique");
+                      setBoardWeeklyVotes({ alistair: true, vance: false, cynthia: true });
+                    }}
+                    className="w-full p-3.5 bg-slate-950/30 hover:bg-slate-850/40 border border-slate-800 hover:border-rose-400/30 text-left rounded-xl transition-all block text-xs"
+                  >
+                    <div className="font-black text-rose-400">💎 Pitch Synergy Auditing & Compliance</div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-normal">
+                      Focus on compliance, scaling elite hired capabilities, paying down administrative wastes, and standardized governance. Delights Cynthia Vance!
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STAGE 2: THE CRITIQUE DISCUSSION DIALOGUE */}
+            {boardMeetingStage === "critique" && (
+              <div className="space-y-4">
+                <div className="bg-slate-950/40 border border-slate-800 p-3.5 rounded-xl text-center text-xs text-slate-400 font-sans">
+                  Slide delivered: <span className="font-bold text-amber-400">"{boardMeetingThesis}" Thesis Paper</span>.
+                </div>
+
+                <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-850 max-h-[250px] overflow-y-auto">
+                  <div className="text-[9px] text-slate-500 uppercase font-black tracking-wider mb-1">Board Real-Time Response feed</div>
+                  
+                  {/* Alistair */}
+                  <div className="flex items-start space-x-2 text-xs">
+                    <span className="text-lg bg-emerald-500/15 p-1.5 rounded-full border border-emerald-500/10 font-sans">👴</span>
+                    <div className="flex-1">
+                      <div className="font-extrabold text-emerald-400 text-[10px]">Sir Alistair Sterling</div>
+                      <p className="text-slate-300 leading-normal mt-0.5 italic">
+                        {boardMeetingThesis === "Consolidated Defense" 
+                          ? "“Prudent approach! Liquid limits protect us from systemic bubble valuations. Managing Director, maintaining steady reserves is wise.”"
+                          : "“I find your lack of capital discipline and administrative executive waste concerning. Operational speculation is fleeting.”"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Vance Gekko */}
+                  <div className="flex items-start space-x-2 text-xs border-t border-slate-900 pt-2.5">
+                    <span className="text-lg bg-amber-500/15 p-1.5 rounded-full border border-amber-500/10 font-sans">🦅</span>
+                    <div className="flex-1">
+                      <div className="font-extrabold text-amber-400 text-[10px]">Vance \"Vulture\" Gekko</div>
+                      <p className="text-slate-300 leading-normal mt-0.5 italic text-slate-100">
+                        {boardMeetingThesis === "Aggressive Expansion" 
+                          ? "“Yes! Speed is cash. Lock up competitor projects, sign higher beta assets, and compound dividends. I back this trajectory.”"
+                          : "“Consolidating cash is for scared amateurs. Defensive buffers act like rusty anchors. We need to deploy, deploy, deploy!”"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Cynthia Vance */}
+                  <div className="flex items-start space-x-2 text-xs border-t border-slate-900 pt-2.5">
+                    <span className="text-lg bg-red-400/15 p-1.5 rounded-full border border-red-500/10 font-sans">👩‍💼</span>
+                    <div className="flex-1">
+                      <div className="font-extrabold text-red-100 text-[10px]">Cynthia \"Heavy-Hand\" Vance <span className="text-[8px] bg-red-450/20 text-red-400 px-1.5 py-0.5 rounded ml-1 font-bold">STRICT AUDITOR</span></div>
+                      <p className="text-slate-300 leading-normal mt-0.5 italic text-slate-100">
+                        “The thesis looks decent, but let's talk audited details. You spent {formatCurrency(dailyDeductions * 7)} this week on headquarters rent and executive salaries. How do you defend this continuous executive drag, Managing Director?”
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold px-1">Respond to Cynthia's Cost Critique:</div>
+                  
+                  <button
+                    onClick={() => {
+                      setBoardMeetingDefense("Pledge Restructuring");
+                      setBoardMeetingStage("vote");
+                      setBoardWeeklyVotes({ alistair: true, vance: false, cynthia: true }); // Alistair & Cynthia approve
+                      setWeeklyReportGrade("B");
+                      setWeeklyReportCommentary([
+                        "• Cynthia liked your compliance restructuring pledge.",
+                        "• Sir Alistair respects your cost-control guidelines.",
+                        "• Vance Gekko found your budget concessions boring but abstains."
+                      ]);
+                    }}
+                    className="w-full p-3 bg-slate-950/30 hover:bg-slate-850/40 border border-slate-800 text-left rounded-xl hover:border-emerald-500/30 transition-all block text-xs"
+                  >
+                    <div className="font-bold text-white text-[11px]">📝 Commit to Rigorous HQ Cost-Control Audits</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                      Pledge to keep operational budgets strictly streamlined. Cynthia and Sir Alistair agree to authorize your performance.
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setBoardMeetingDefense("Venture Defy");
+                      setBoardMeetingStage("vote");
+                      setBoardWeeklyVotes({ alistair: false, vance: true, cynthia: false }); // Only Vance Gekko
+                      setWeeklyReportGrade("F");
+                      setWeeklyReportCommentary([
+                        "• Vance Gekko loved your bold self-confident venture defense.",
+                        "• Cynthia Vance vetoed the performance report due to compliance violation.",
+                        "• Sir Alistair marked your performance as speculative and asset-light."
+                      ]);
+                    }}
+                    className="w-full p-3 bg-slate-950/30 hover:bg-slate-850/40 border border-slate-800 text-left rounded-xl hover:border-amber-500/30 transition-all block text-xs"
+                  >
+                    <div className="font-bold text-amber-400 text-[11px]">🔥 Deliver Sovereign Venture Capital Defiance Defense</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                      Argue that traditional administrative hurdles do not apply to high-beta disruptors. Pleases Vance, but Cynical Cynthia will VETO!
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (cash < 15000) {
+                        showToast("Inadequate cash! Need $15,000 to buy executive hospitality suites.", "error");
+                        return;
+                      }
+                      setBoardMeetingDefense("Board Perks");
+                      setBoardMeetingStage("vote");
+                      setBoardWeeklyVotes({ alistair: true, vance: true, cynthia: true }); // LANDSLIDE
+                      setWeeklyReportGrade("A+");
+                      setCash(prev => prev - 15000);
+                      setWeeklyReportCommentary([
+                        "• Sir Alistair is highly pleased by the luxury hospitality suite logistics.",
+                        "• Vance Gekko approves the immediate financial override bonus.",
+                        "• Cynthia Vance accepts the priority boardroom override dividends."
+                      ]);
+                    }}
+                    disabled={cash < 15000}
+                    className={`w-full p-3 border text-left rounded-xl transition-all block text-xs ${
+                      cash < 15000 
+                        ? "bg-slate-950/20 border-slate-950 text-slate-600 cursor-not-allowed" 
+                        : "bg-slate-950/30 hover:bg-slate-850/40 border-slate-800 hover:border-red-500/30"
+                    }`}
+                  >
+                    <div className="font-bold text-red-400 text-[11px]">💎 Allocate Corporate Executive Hospitality Perks (-$15,000 cash)</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                      Pay $15,000 of treasury cash towards elite boardroom hospitality and override dividends. Instant LANDSLIDE pass!
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STAGE 3: VOTING RESULT SCREEN */}
+            {boardMeetingStage === "vote" && (
+              <div className="space-y-4">
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3 font-sans">
+                  <div className="text-center text-[10px] text-slate-500 uppercase font-black tracking-wider">
+                    Tabulated Board Votes (Day {day} Audited Review)
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
+                      <span className="block text-[10px] text-slate-500 font-bold font-sans">Sir Alistair</span>
+                      <span className={`block font-black mt-1 ${boardWeeklyVotes.alistair ? "text-emerald-400" : "text-rose-400"}`}>
+                        {boardWeeklyVotes.alistair ? "✅ YES" : "❌ NO"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
+                      <span className="block text-[10px] text-slate-500 font-bold font-sans">Vance Gekko</span>
+                      <span className={`block font-black mt-1 ${boardWeeklyVotes.vance ? "text-emerald-400" : "text-rose-400"}`}>
+                        {boardWeeklyVotes.vance ? "✅ YES" : "❌ NO"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
+                      <span className="block text-[10px] text-red-500 font-bold font-sans">Cynthia Vance</span>
+                      <span className={`block font-black mt-1 ${boardWeeklyVotes.cynthia ? "text-emerald-400" : "text-rose-400"}`}>
+                        {boardWeeklyVotes.cynthia ? "✅ YES" : "❌ NO"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/80 text-xs text-slate-300 leading-normal space-y-1">
+                  <div className="font-extrabold text-white text-center text-sm uppercase tracking-wider">
+                    Governance Grade Awarded: <span className="text-amber-400 font-black text-lg">{weeklyReportGrade}</span>
+                  </div>
+                  {boardMeetingDefense && (
+                    <div className="text-[10px] text-slate-500 text-center font-semibold italic">
+                      Strategic Argument Delivered: {boardMeetingDefense}
+                    </div>
+                  )}
+                  <div className="pt-2 space-y-1 font-sans text-slate-400">
+                    {weeklyReportCommentary.map((c, i) => <div key={i}>{c}</div>)}
+                  </div>
+                </div>
+
+                {(() => {
+                  const passVotes = [boardWeeklyVotes.alistair, boardWeeklyVotes.vance, boardWeeklyVotes.cynthia].filter(v => v).length;
+                  const isPassed = passVotes >= 2;
+
+                  return (
+                    <div className="space-y-3 animate-fade-in">
+                      {isPassed ? (
+                        <div className="space-y-3 font-sans">
+                          <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-lg text-xs leading-normal">
+                            <span className="text-emerald-400 font-extrabold block">🎉 PRESENTATION APPROVED ({passVotes}/3 votes!)</span>
+                            {weeklyReportGrade === "A+" ? (
+                              <span className="text-slate-300 mt-1 block">The board rewards your premium treasury hospitality and operational excellence with an emergency funding grant of <span className="font-bold text-emerald-400 font-mono">+$50,000</span> cash!</span>
+                            ) : (
+                              <span className="text-slate-300 mt-1 block font-sans">Your weekly operational budget is fully authorized for the coming week. Keep up the compliance margins.</span>
+                            )}
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              let nextCash = cash;
+                              if (weeklyReportGrade === "A+") {
+                                nextCash += 50000;
+                              }
+                              setCash(nextCash);
+                              setWeeklyMeetingCompletedDay(day);
+                              setBoardMeetingOpen(false);
+                              showToast(`Board Report for Day ${day} archived successfully!`, "success");
+
+                              saveGame({
+                                userName,
+                                startType,
+                                cash: nextCash,
+                                day,
+                                stocks,
+                                mergers,
+                                selectedTab,
+                                activeNews,
+                                transactions,
+                                officeId,
+                                hiredStaffIds,
+                                weeklyMeetingCompletedDay: day
+                              });
+                            }}
+                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3.5 rounded-xl text-xs font-sans font-bold"
+                          >
+                            COMPLETE WEEKLY PRESENTATION SESSION
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 font-sans">
+                          <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-lg text-xs text-rose-100 leading-normal font-sans">
+                            <span className="font-black text-rose-400 block">❌ PRESENTATION REJECTED! ({passVotes}/3 votes)</span>
+                            Cynthia Vance has issued her sovereign executive veto. Your managing director budget is completely locked.
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              onClick={() => {
+                                if (cash < 12000) {
+                                  showToast("Inadequate cash to cover the auditing penalty!", "error");
+                                  return;
+                                }
+                                setCash(prev => prev - 12000);
+                                setWeeklyMeetingCompletedDay(day);
+                                setBoardMeetingOpen(false);
+                                showToast(`Paid Restructuring Fine. Board review passed under duress.`, "success");
+
+                                saveGame({
+                                  userName,
+                                  startType,
+                                  cash: cash - 12005,
+                                  day,
+                                  stocks,
+                                  mergers,
+                                  selectedTab,
+                                  activeNews,
+                                  transactions,
+                                  officeId,
+                                  hiredStaffIds,
+                                  weeklyMeetingCompletedDay: day
+                                });
+                              }}
+                              disabled={cash < 12000}
+                              className={`p-3 text-xs font-bold rounded-xl flex flex-col items-center justify-center border text-center ${
+                                cash < 12000 
+                                  ? "bg-slate-950/20 border-slate-950 text-slate-600 cursor-not-allowed" 
+                                  : "bg-slate-950 hover:bg-slate-850 border-rose-500/20 text-rose-450"
+                              }`}
+                            >
+                              <span>💸 Settle Audit fine</span>
+                              <span className="text-[10px] font-mono text-slate-500 font-normal block mt-1">Costs -$12,000 cash</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                const companiesOwned = mergers.filter(m => m.isCompleted).length;
+                                if (companiesOwned < 2) {
+                                  showToast("Underlying audit leverage too low! Must own at least 2 subsidiaries.", "error");
+                                  return;
+                                }
+                                setWeeklyMeetingCompletedDay(day);
+                                setBoardMeetingOpen(false);
+                                showToast(`Director Veto exerted. Overrode board audit.`, "success");
+
+                                saveGame({
+                                  userName,
+                                  startType,
+                                  cash,
+                                  day,
+                                  stocks,
+                                  mergers,
+                                  selectedTab,
+                                  activeNews,
+                                  transactions,
+                                  officeId,
+                                  hiredStaffIds,
+                                  weeklyMeetingCompletedDay: day
+                                });
+                              }}
+                              disabled={mergers.filter(m => m.isCompleted).length < 2}
+                              className={`p-3 text-xs font-bold rounded-xl flex flex-col items-center justify-center border text-center ${
+                                mergers.filter(m => m.isCompleted).length < 2 
+                                  ? "bg-slate-950/20 border-slate-950 text-slate-600 cursor-not-allowed" 
+                                  : "bg-slate-950 hover:bg-slate-850 border-amber-500/20 text-amber-500"
+                              }`}
+                            >
+                              <span>🔱 Exert Director Controlling Veto</span>
+                              <span className="text-[10px] text-slate-500 font-normal block mt-1 font-sans">Requires 2+ owned firms ({mergers.filter(m => m.isCompleted).length}/2)</span>
+                            </button>
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              setBoardMeetingStage("brief");
+                              setBoardMeetingThesis(null);
+                              setBoardMeetingDefense(null);
+                            }}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs text-center block font-sans"
+                          >
+                            🔄 RE-DRAFT PRESENTATION SLIDES
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
           </div>
         </div>
       )}
