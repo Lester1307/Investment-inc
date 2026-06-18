@@ -99,9 +99,9 @@ const curatedMergers: MergerTarget[] = [
     ceoName: "Mia Brew",
     ceoAvatar: "☕",
     description: "A popular downtown specialty coffee counter equipped with high-yield automated barista machinery and a massive app-based delivery list. Yields immediate and stable starter dividends.",
-    baseValuation: 160000,
-    minAcceptableThreshold: 135000,
-    currentAskingPrice: 160000,
+    baseValuation: 32000,
+    minAcceptableThreshold: 28000,
+    currentAskingPrice: 32000,
     trust: 60,
     mood: "Reasonable",
     synergyText: "Start from zero standard! Activates instant +$75,000 daily seed cash dividends. Boosts local Meme tech stock values by +5%.",
@@ -123,9 +123,9 @@ const curatedMergers: MergerTarget[] = [
     ceoName: "Elena Vance",
     ceoAvatar: "👩‍💼",
     description: "Solaris owns premium water turbines with eco-safe hydro-extraction grids. Sustainable green growth margins, but current cash flow limits their global plant extensions.",
-    baseValuation: 750000,
-    minAcceptableThreshold: 620000,
-    currentAskingPrice: 750000,
+    baseValuation: 125000,
+    minAcceptableThreshold: 105000,
+    currentAskingPrice: 125000,
     trust: 50,
     mood: "Reasonable",
     synergyText: "Sustained green logistics. Generates high passive income of +$90,000/day. Boosts local Energy holdings by +12%.",
@@ -147,9 +147,9 @@ const curatedMergers: MergerTarget[] = [
     ceoName: "Dr. Clara Wu",
     ceoAvatar: "👩‍🔬",
     description: "Clinical lab developing specialized molecular vaccines. Currently out of developmental capital, they require a patient, long-term investor who understands biomedical pipelines.",
-    baseValuation: 2500000,
-    minAcceptableThreshold: 2100000,
-    currentAskingPrice: 2500000,
+    baseValuation: 340000,
+    minAcceptableThreshold: 290000,
+    currentAskingPrice: 340000,
     trust: 55,
     mood: "Reasonable",
     synergyText: "Pioneering therapeutic diagnostics. Yields passive licensing royalty dividends of +$110,000/day. Boosts Biotech stocks by +18%.",
@@ -171,9 +171,9 @@ const curatedMergers: MergerTarget[] = [
     ceoName: "Victor Sterling",
     ceoAvatar: "👨‍💻",
     description: "Hyper-scalable automated warehouses bipedal loaders. Highly requested in automated supply-chains, they are preparing for major public IPO but are open to deep private fund bids.",
-    baseValuation: 9500000,
-    minAcceptableThreshold: 7900000,
-    currentAskingPrice: 9500000,
+    baseValuation: 1150000,
+    minAcceptableThreshold: 980000,
+    currentAskingPrice: 1150000,
     trust: 45,
     mood: "Defensive",
     synergyText: "Unlocks global chip design networks. Generates stellar automation cashflows of +$135,000/day. Boosts Tech sector values by +25%.",
@@ -195,9 +195,9 @@ const curatedMergers: MergerTarget[] = [
     ceoName: "Marcus 'Bull' Hudson",
     ceoAvatar: "👨‍💼",
     description: "Skeptical, old-school defense manufacturing contractor. Demands massive liquid payouts to secure his generational trust funds before retirement.",
-    baseValuation: 35000000,
-    minAcceptableThreshold: 29500000,
-    currentAskingPrice: 35000000,
+    baseValuation: 4200000,
+    minAcceptableThreshold: 3600000,
+    currentAskingPrice: 4200000,
     trust: 30,
     mood: "Greedy",
     synergyText: "Immediate defense empire supremacy. Delivers heavy sovereign government contract yields of +$175,000/day. Boosts Tech by +35%.",
@@ -324,10 +324,10 @@ const generateMoreMergers = (): MergerTarget[] => {
     }
     
     const ceoName = `${ceoFirstNames[Math.floor(random() * ceoFirstNames.length)]} ${ceoLastNames[Math.floor(random() * ceoLastNames.length)]}`;
-    const baseValuation = Math.round((500000 + random() * 15000000) / 1000) * 1000;
+    const baseValuation = Math.round((25000 + random() * 4800000) / 1000) * 1000;
     const minAcceptableThreshold = Math.round((baseValuation * (0.8 + random() * 0.15) / 1000)) * 1000;
     const sector = sectors[Math.floor(random() * sectors.length)];
-    const dailyIncome = Math.round(65000 + (baseValuation * 0.008) + random() * 45000);
+    const dailyIncome = Math.round(85000 + random() * 30000);
     const trust = Math.floor(30 + random() * 40);
     
     const moods: NegotiationMood[] = ["Greedy", "Defensive", "Reasonable", "Thrilled"];
