@@ -42,6 +42,8 @@ export default function App() {
   // Office & Staff hires
   const [officeId, setOfficeId] = useState<string>("desk");
   const [hiredStaffIds, setHiredStaffIds] = useState<string[]>([]);
+  const [lastCashCallDay, setLastCashCallDay] = useState<number>(0);
+  const [marketingBlitzCount, setMarketingBlitzCount] = useState<number>(0);
 
   // Sub-UI state
   const [selectedStockTicker, setSelectedStockTicker] = useState<string>("AETH");
@@ -150,6 +152,8 @@ export default function App() {
           setTransactions(state.transactions ?? []);
           setOfficeId(state.officeId ?? "desk");
           setHiredStaffIds(state.hiredStaffIds ?? []);
+          setLastCashCallDay(state.lastCashCallDay ?? 0);
+          setMarketingBlitzCount(state.marketingBlitzCount ?? 0);
           setIsOnboarded(true);
         }
       }
@@ -161,11 +165,16 @@ export default function App() {
   // Save game state to local and cloud
   const saveGame = (updatedState: any) => {
     try {
-      localStorage.setItem("apex_capital_v2_savegame", JSON.stringify(updatedState));
+      const stateToSave = {
+        ...updatedState,
+        lastCashCallDay,
+        marketingBlitzCount
+      };
+      localStorage.setItem("apex_capital_v2_savegame", JSON.stringify(stateToSave));
       
       // Save to Firebase Cloud as well if connected
       if (isFirebaseConnected()) {
-        saveGameToCloud(updatedState.userName, updatedState)
+        saveGameToCloud(updatedState.userName, stateToSave)
           .then(success => {
             if (success) {
               console.log("Uploaded game save stably to Firebase Firestore!");
@@ -395,6 +404,175 @@ export default function App() {
     ]);
 
     showToast(`🎉 SEC Approved IPO! Sold 30% equity for ${formatCurrency(instantCash)} cash. Listed as Ticker: ${ticker}`, "success");
+  };
+
+  // NEW ATTRACTIVE FEATURE: BOARDROOM MARKETING BLITZ
+  const executeMarketingBlitz = () => {
+    const cost = 75000;
+    const completedCount = mergers.filter(m => m.isCompleted).length;
+    if (completedCount === 0) {
+      showToast("Requires at least 1 acquired subsidiary to run a marketing campaign.", "error");
+      return;
+    }
+    if (cash < cost) {
+      showToast(`Insufficient corporate capital. Need ${formatCurrency(cost)}`, "error");
+      return;
+    }
+
+    setCash(prev => prev - cost);
+    setMarketingBlitzCount(prev => prev + 1);
+
+    const updatedMergers = mergers.map(m => {
+      if (m.isCompleted) {
+        const yieldBoost = Math.round(m.dailyIncome * 0.15);
+        return {
+          ...m,
+          dailyIncome: m.dailyIncome + yieldBoost,
+          baseValuation: Math.round(m.baseValuation * 1.15),
+          currentAskingPrice: Math.round(m.baseValuation * 1.15)
+        };
+      }
+      return m;
+    });
+
+    setMergers(updatedMergers);
+    
+    const logs: TransactionHistory[] = [
+      ...transactions,
+      {
+        day,
+        type: "SALARY",
+        subject: "Marketing Campaign Blitz Campaign",
+        amount: cost,
+        isPositive: false
+      }
+    ];
+    setTransactions(logs);
+
+    showToast(`🚀 Global Campaign Launched! All subsidiaries received permanent +15% passive dividend yields.`, "success");
+
+    saveGame({
+      userName,
+      startType,
+      cash: cash - cost,
+      day,
+      stocks,
+      mergers: updatedMergers,
+      selectedTab,
+      activeNews,
+      newsFeed,
+      transactions: logs,
+      officeId,
+      hiredStaffIds
+    });
+  };
+
+  // NEW ATTRACTIVE FEATURE: GLOBAL EXECUTIVE MASTERMIND SUMMIT
+  const executeCEOSummit = () => {
+    const cost = 40000;
+    if (cash < cost) {
+      showToast(`Insufficient corporate capital. Need ${formatCurrency(cost)}`, "error");
+      return;
+    }
+
+    setCash(prev => prev - cost);
+
+    const updatedMergers = mergers.map(m => {
+      if (!m.isCompleted && !m.isWalkedOut) {
+        const newTrust = Math.min(100, m.trust + 20);
+        let mood = m.mood;
+        if (newTrust < 25) mood = "Defensive";
+        else if (newTrust < 45) mood = "Greedy";
+        else if (newTrust < 75) mood = "Reasonable";
+        else mood = "Thrilled";
+
+        return {
+          ...m,
+          trust: newTrust,
+          mood
+        };
+      }
+      return m;
+    });
+
+    setMergers(updatedMergers);
+
+    const logs: TransactionHistory[] = [
+      ...transactions,
+      {
+        day,
+        type: "SALARY",
+        subject: "CEO Mastermind Summit",
+        amount: cost,
+        isPositive: false
+      }
+    ];
+    setTransactions(logs);
+
+    showToast(`🤝 Hosted Mastermind Summit! +20 Trust gained with all pipeline negotiation targets.`, "success");
+
+    saveGame({
+      userName,
+      startType,
+      cash: cash - cost,
+      day,
+      stocks,
+      mergers: updatedMergers,
+      selectedTab,
+      activeNews,
+      newsFeed,
+      transactions: logs,
+      officeId,
+      hiredStaffIds
+    });
+  };
+
+  // NEW ATTRACTIVE FEATURE: EMERGENCY BOARD CASH CALL (DIVIDEND DISTRIBUTION DRAW)
+  const executeEmergencyCashCall = () => {
+    const completedCount = mergers.filter(m => m.isCompleted).length;
+    if (completedCount === 0) {
+      showToast("Requires at least 1 acquired subsidiary to execute a board cash call.", "error");
+      return;
+    }
+
+    const daysElapsed = day - lastCashCallDay;
+    if (lastCashCallDay > 0 && daysElapsed < 15) {
+      showToast(`Emergency cash call is on cooldown. Available in ${15 - daysElapsed} days.`, "error");
+      return;
+    }
+
+    const dividendPayout = completedCount * 150000;
+    setCash(prev => prev + dividendPayout);
+    setLastCashCallDay(day);
+
+    const logs: TransactionHistory[] = [
+      ...transactions,
+      {
+        day,
+        type: "DIVIDEND",
+        subject: "Emergency Board Cash Call Dividend Draw",
+        amount: dividendPayout,
+        isPositive: true
+      }
+    ];
+    setTransactions(logs);
+
+    showToast(`💰 Boardroom Approved! Drew emergency dividends of ${formatCurrency(dividendPayout)} from control assets.`, "success");
+
+    saveGame({
+      userName,
+      startType,
+      cash: cash + dividendPayout,
+      day,
+      stocks,
+      mergers,
+      selectedTab,
+      activeNews,
+      newsFeed,
+      transactions: logs,
+      officeId,
+      hiredStaffIds
+    });
   };
 
   // Toast auto-clear
@@ -1212,7 +1390,7 @@ export default function App() {
       return;
     }
 
-    const setupCash = startType === "Easier" ? 75000 : 25000;
+    const setupCash = startType === "Easier" ? 350000 : 100000;
     const initialLog: TransactionHistory[] = [
       { day: 1, type: "DIVIDEND", subject: `Fund Seed Capital (${startType})`, amount: setupCash, isPositive: true }
     ];
@@ -1283,7 +1461,7 @@ export default function App() {
                   <TrendingUp className={`w-6 h-6 ${startType === "Easier" ? "text-amber-500" : "text-slate-400"}`} />
                   <div>
                     <div className="font-bold text-sm">Easier</div>
-                    <div className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">Start with $75,000 starting cash</div>
+                    <div className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">Start with $350,000 starting cash</div>
                   </div>
                 </button>
 
@@ -1298,7 +1476,7 @@ export default function App() {
                   <Flame className={`w-6 h-6 ${startType === "Hard" ? "text-amber-500" : "text-slate-400"}`} />
                   <div>
                     <div className="font-bold text-sm">Hard</div>
-                    <div className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">Start with only $25k</div>
+                    <div className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">Start with only $100k</div>
                   </div>
                 </button>
               </div>
@@ -1463,6 +1641,24 @@ export default function App() {
                     <span className={`font-extrabold ${dailyPassiveEarnings - dailyDeductions >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                       {dailyPassiveEarnings - dailyDeductions >= 0 ? "+" : ""}{formatCurrency(dailyPassiveEarnings - dailyDeductions)}
                     </span>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/60 pt-3 space-y-2.5">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Enterprise Projections</span>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850">
+                      <span className="text-[9px] text-slate-500 block uppercase">Weekly Net</span>
+                      <span className={`font-mono font-bold block mt-0.5 ${(dailyPassiveEarnings - dailyDeductions) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {(dailyPassiveEarnings - dailyDeductions) >= 0 ? "+" : ""}{formatCurrency((dailyPassiveEarnings - dailyDeductions) * 7)}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850">
+                      <span className="text-[9px] text-slate-500 block uppercase">Monthly Net (30d)</span>
+                      <span className={`font-mono font-bold block mt-0.5 ${(dailyPassiveEarnings - dailyDeductions) >= 0 ? "text-amber-400" : "text-rose-400"}`}>
+                        {(dailyPassiveEarnings - dailyDeductions) >= 0 ? "+" : ""}{formatCurrency((dailyPassiveEarnings - dailyDeductions) * 30)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1936,6 +2132,82 @@ export default function App() {
                   <p className="text-xs text-slate-400 leading-normal">
                     You have complete controlling stakes in these entities. Appoint custom operations executives, set corporate staffing tiers, reinvest dynamic expansion capital, or list IPO ticker shares under SEC registration to liquidate equity.
                   </p>
+                </div>
+
+                {/* ATTRACITIVE FEATURE: ENTERPRISE BOARD SPECIALS PANEL */}
+                <div className="bg-slate-900 border border-slate-800/85 rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                    <div>
+                      <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest">💼 Enterprise Venture Actions & Board Specials</h4>
+                      <p className="text-[10px] text-slate-500 mt-1">Deploy bulk corporate capital to optimize your entire pipeline operations or draw emergency dividends.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* ACTION 1: MARKETING BLITZ */}
+                    <button 
+                      onClick={executeMarketingBlitz}
+                      className="bg-slate-950 hover:bg-slate-850 border border-slate-850 hover:border-slate-800 p-4 rounded-xl text-left flex flex-col justify-between transition-all group active:scale-98 relative overflow-hidden"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-sm">🚀</span>
+                          <span className="text-xs font-bold text-slate-200">Global Marketing Blitz</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Permanently boost passive yields of all completed subsidiaries by +15% and expands their book valuations.
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-2 border-t border-slate-850 w-full flex items-center justify-between">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold">Campaign Cost</span>
+                        <span className="text-xs font-mono font-bold text-amber-400">$75,000</span>
+                      </div>
+                    </button>
+
+                    {/* ACTION 2: CEO MASTERMIND */}
+                    <button 
+                      onClick={executeCEOSummit}
+                      className="bg-slate-950 hover:bg-slate-850 border border-slate-850 hover:border-slate-800 p-4 rounded-xl text-left flex flex-col justify-between transition-all group active:scale-98 relative overflow-hidden"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-sm">🤝</span>
+                          <span className="text-xs font-bold text-slate-200">CEO Mastermind Summit</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Host target executives at an elite workshop, boosting their negotiation trust by +20 points across-the-board.
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-2 border-t border-slate-850 w-full flex items-center justify-between">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold">Summit Cost</span>
+                        <span className="text-xs font-mono font-bold text-amber-400">$40,000</span>
+                      </div>
+                    </button>
+
+                    {/* ACTION 3: EMERGENCY CASH CALL */}
+                    <button 
+                      onClick={executeEmergencyCashCall}
+                      className="bg-slate-950 hover:bg-slate-850 border border-slate-850 hover:border-slate-800 p-4 rounded-xl text-left flex flex-col justify-between transition-all group active:scale-98 relative overflow-hidden"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-sm">💰</span>
+                          <span className="text-xs font-bold text-slate-200">Boardroom Dividend Draw</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Levy an emergency dividend distribution of $150,000 per completed subsidiary straight into your treasury. (15d Cooldown)
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-2 border-t border-slate-850 w-full flex items-center justify-between">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold">STATUS</span>
+                        {lastCashCallDay > 0 && day - lastCashCallDay < 15 ? (
+                          <span className="text-[10px] text-rose-400 font-bold uppercase font-mono">Cd: {15 - (day - lastCashCallDay)}d</span>
+                        ) : (
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase font-mono">READY</span>
+                        )}
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
                 {mergers.filter(m => m.isCompleted).length === 0 ? (
