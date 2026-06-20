@@ -22,13 +22,25 @@ import {
 
 function NewsTicker({ newsFeed }: { newsFeed: MarketNews[] }) {
   const tickerItems = useMemo(() => {
-    const items = newsFeed.slice(0, 5);
+    if (!newsFeed || !Array.isArray(newsFeed)) return [];
+    
+    // Filter out any invalid items to be perfectly safe
+    const validItems = newsFeed.filter(item => 
+      item && 
+      typeof item === "object" && 
+      typeof item.headline === "string"
+    );
+    
+    const items = validItems.slice(0, 5);
     if (items.length === 0) return [];
+    
     // Repeat items to ensure continuous infinite horizontal scrolling
     return [...items, ...items, ...items];
   }, [newsFeed]);
 
-  if (newsFeed.length === 0) return null;
+  if (!newsFeed || !Array.isArray(newsFeed) || newsFeed.length === 0 || tickerItems.length === 0) {
+    return null;
+  }
 
   return (
     <div className="bg-slate-900 border-b border-slate-800/80 py-2.5 overflow-hidden w-full relative z-20">
@@ -43,7 +55,9 @@ function NewsTicker({ newsFeed }: { newsFeed: MarketNews[] }) {
         <div className="flex-1 overflow-hidden relative ticker-mask">
           <div className="animate-ticker flex items-center space-x-12">
             {tickerItems.map((item, idx) => {
-              const diff = Math.round((item.priceMultiplier - 1) * 100);
+              if (!item) return null;
+              const pm = typeof item.priceMultiplier === "number" ? item.priceMultiplier : 1;
+              const diff = Math.round((pm - 1) * 100);
               const changeText = diff > 0 
                 ? `▲ +${diff}%` 
                 : diff < 0 
@@ -59,7 +73,7 @@ function NewsTicker({ newsFeed }: { newsFeed: MarketNews[] }) {
                       ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
                       : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                   }`}>
-                    {item.affectedTicker === "ALL" ? "GLOBAL" : item.affectedTicker}
+                    {(item.affectedTicker || "ALL") === "ALL" ? "GLOBAL" : item.affectedTicker}
                   </span>
                   <span>{item.headline}</span>
                   <span className={`font-mono text-[10px] font-bold ${
@@ -815,7 +829,7 @@ export default function App() {
     });
 
     // Feed new daily news to Global Newsroom
-    const nextNewsFeed = [todayNews, ...newsFeed];
+    const nextNewsFeed = [todayNews, ...(newsFeed || [])];
     if (nextNewsFeed.length > 50) nextNewsFeed.pop();
     setNewsFeed(nextNewsFeed);
 
@@ -2760,7 +2774,7 @@ export default function App() {
 
               {/* LIST OF LOGGED NEWS ITEMS */}
               <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
-                {newsFeed.length === 0 ? (
+                {(!newsFeed || newsFeed.length === 0) ? (
                   <div className="text-center py-12 text-slate-500 text-xs">No syndicated articles received yet. Advance the business day to receive new stories!</div>
                 ) : (
                   newsFeed.map((news, idx) => (
