@@ -59,3 +59,29 @@ code, pre {
 .animate-toast-in {
   animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Infinite Scrolling Marquee Ticker */
+@keyframes ticker-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-33.3333%, 0, 0);
+  }
+}
+
+.animate-ticker {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-scroll 35s linear infinite;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+.ticker-mask {
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+

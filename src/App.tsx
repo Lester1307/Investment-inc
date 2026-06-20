@@ -20,6 +20,67 @@ import {
   isFirebaseConnected
 } from "./firebase";
 
+function NewsTicker({ newsFeed }: { newsFeed: MarketNews[] }) {
+  const tickerItems = useMemo(() => {
+    const items = newsFeed.slice(0, 5);
+    if (items.length === 0) return [];
+    // Repeat items to ensure continuous infinite horizontal scrolling
+    return [...items, ...items, ...items];
+  }, [newsFeed]);
+
+  if (newsFeed.length === 0) return null;
+
+  return (
+    <div className="bg-slate-900 border-b border-slate-800/80 py-2.5 overflow-hidden w-full relative z-20">
+      <div className="max-w-6xl mx-auto px-4 flex items-center">
+        {/* FLASH LIVE INDICATOR BAR */}
+        <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-bold text-amber-500 uppercase tracking-widest shrink-0 mr-4 shadow-sm select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+          <span>FLASH</span>
+        </div>
+
+        {/* Ticker viewport area */}
+        <div className="flex-1 overflow-hidden relative ticker-mask">
+          <div className="animate-ticker flex items-center space-x-12">
+            {tickerItems.map((item, idx) => {
+              const diff = Math.round((item.priceMultiplier - 1) * 100);
+              const changeText = diff > 0 
+                ? `▲ +${diff}%` 
+                : diff < 0 
+                  ? `▼ ${diff}%` 
+                  : "✦ STABLE";
+              return (
+                <div 
+                  key={idx} 
+                  className="flex items-center space-x-3 text-xs text-slate-300 font-semibold whitespace-nowrap shrink-0 hover:text-white transition-colors cursor-default select-none"
+                >
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-wider ${
+                    item.isPositive 
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                      : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                  }`}>
+                    {item.affectedTicker === "ALL" ? "GLOBAL" : item.affectedTicker}
+                  </span>
+                  <span>{item.headline}</span>
+                  <span className={`font-mono text-[10px] font-bold ${
+                    diff > 0 
+                      ? "text-emerald-400" 
+                      : diff < 0 
+                        ? "text-rose-400" 
+                        : "text-slate-500"
+                  }`}>
+                    {changeText}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // Onboarding & user profile state
   const [userName, setUserName] = useState<string>("");
@@ -1616,6 +1677,8 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <NewsTicker newsFeed={newsFeed} />
 
       {/* QUICK STATUS TICKER BANNER */}
       <div className="bg-slate-900 border-b border-slate-800/40 text-xs py-2 px-4 shadow-sm overflow-hidden">
