@@ -209,33 +209,39 @@ export default function App() {
       const savedData = localStorage.getItem("apex_capital_v2_savegame");
       if (savedData) {
         const state = JSON.parse(savedData);
-        if (state.userName && state.startType) {
+        if (state && typeof state === "object" && state.userName && state.startType) {
           setUserName(state.userName);
           setStartType(state.startType);
-          setCash(state.cash ?? 25000);
-          setDay(state.day ?? 1);
+          setCash(typeof state.cash === "number" ? state.cash : 25000);
+          setDay(typeof state.day === "number" ? state.day : 1);
 
           // Safe backfill for stocks
-          let loadedStocks = state.stocks ?? initialStocks;
+          let loadedStocks = Array.isArray(state.stocks) ? state.stocks : initialStocks;
           if (loadedStocks.length < 100) {
             const extraStocks = initialStocks.slice(loadedStocks.length);
             loadedStocks = [...loadedStocks, ...extraStocks];
           }
-          setStocks(loadedStocks);
+          // Filter out any nullable/invalid stocks
+          loadedStocks = loadedStocks.filter((s: any) => s && typeof s === "object" && typeof s.ticker === "string");
+          setStocks(loadedStocks.length > 0 ? loadedStocks : initialStocks);
 
           // Safe backfill for boardroom mergers
-          let loadedMergers = state.mergers ?? initialMergers;
+          let loadedMergers = Array.isArray(state.mergers) ? state.mergers : initialMergers;
           const firstFiveIds = new Set(["cafe", "solaris", "biogen", "nova", "shld"]);
+          
+          // Filter out any nullable/invalid mergers
+          loadedMergers = loadedMergers.filter((m: any) => m && typeof m === "object" && typeof m.id === "string");
           if (loadedMergers.length < 105) {
             const existingIds = new Set(loadedMergers.map((m: any) => m.id));
             const extraMergers = initialMergers.filter(m => !existingIds.has(m.id));
             loadedMergers = [...loadedMergers, ...extraMergers];
           }
+
           // Guarantee modern corporate metadata defaults on loaded entities
           loadedMergers = loadedMergers.map((m: any) => {
             const initialMatch = initialMergers.find(im => im.id === m.id);
-            const dailyIncome = initialMatch ? initialMatch.dailyIncome : m.dailyIncome;
-            const synergyText = initialMatch ? initialMatch.synergyText : m.synergyText;
+            const dailyIncome = initialMatch ? initialMatch.dailyIncome : (typeof m.dailyIncome === "number" ? m.dailyIncome : 0);
+            const synergyText = initialMatch ? initialMatch.synergyText : (typeof m.synergyText === "string" ? m.synergyText : "");
             return {
               ...m,
               dailyIncome,
@@ -249,17 +255,26 @@ export default function App() {
               isOpenToNegotiate: m.isOpenToNegotiate !== undefined ? m.isOpenToNegotiate : firstFiveIds.has(m.id)
             };
           });
-          setMergers(loadedMergers);
+          setMergers(loadedMergers.length > 0 ? loadedMergers : initialMergers);
 
           setSelectedTab(state.selectedTab ?? "HQ");
           setActiveNews(state.activeNews ?? newsList[0]);
-          setNewsFeed(state.newsFeed ?? [state.activeNews ?? newsList[0]]);
-          setTransactions(state.transactions ?? []);
-          setOfficeId(state.officeId ?? "desk");
-          setHiredStaffIds(state.hiredStaffIds ?? []);
-          setLastCashCallDay(state.lastCashCallDay ?? 0);
-          setMarketingBlitzCount(state.marketingBlitzCount ?? 0);
-          setWeeklyMeetingCompletedDay(state.weeklyMeetingCompletedDay ?? 0);
+          
+          let loadedNewsFeed = Array.isArray(state.newsFeed) ? state.newsFeed : [];
+          if (loadedNewsFeed.length === 0 && state.activeNews) {
+            loadedNewsFeed = [state.activeNews];
+          }
+          if (loadedNewsFeed.length === 0) {
+            loadedNewsFeed = [newsList[0]];
+          }
+          setNewsFeed(loadedNewsFeed);
+
+          setTransactions(Array.isArray(state.transactions) ? state.transactions : []);
+          setOfficeId(typeof state.officeId === "string" ? state.officeId : "desk");
+          setHiredStaffIds(Array.isArray(state.hiredStaffIds) ? state.hiredStaffIds : []);
+          setLastCashCallDay(typeof state.lastCashCallDay === "number" ? state.lastCashCallDay : 0);
+          setMarketingBlitzCount(typeof state.marketingBlitzCount === "number" ? state.marketingBlitzCount : 0);
+          setWeeklyMeetingCompletedDay(typeof state.weeklyMeetingCompletedDay === "number" ? state.weeklyMeetingCompletedDay : 0);
           setIsOnboarded(true);
         }
       }
